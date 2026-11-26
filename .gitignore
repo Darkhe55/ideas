@@ -1,0 +1,41 @@
+# 环境与依赖
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+node_modules/
+
+# 敏感信息（切勿提交）
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials*
+token*
+.ssh/
+id_rsa*
+id_ed25519*
+
+# 模型权重、数据与运行产物
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+data/
+datasets/
+runs/
+outputs/
+logs/
+*.log
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
