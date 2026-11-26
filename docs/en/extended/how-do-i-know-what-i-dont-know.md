@@ -1,6 +1,6 @@
 # How Do I Know What I Don't Know (Extended)
 
-> Stage: **In Progress** (~5 pages) · Status: **WIP** · Last updated: 2026-11-26
+> Stage: **In Progress** (~7 pages) · Status: **WIP** · Last updated: 2026-11-26
 > Language: [中文](../../扩展中途版/我如何知道我不知道什么.md) · English
 
 ## 1. The Problem
@@ -53,7 +53,7 @@ Also distinguish three boundaries:
 
 **Claim 2: detectability must be layered.** Known unknowns can be detected with internal signals plus external evidence; unknown unknowns cannot be self-certified and can only be *discovered* through **coverage assumptions + external probing + feedback loops**. The design must honestly separate the two layers instead of pretending introspection solves everything.
 
-**Claim 3: ignorance must drive action.** Once ignorance is detected, the next step is to ask, retrieve, abstain, escalate, or log for later investigation — not to keep generating.
+**Claim 4: ignorance awareness ultimately leads to spontaneous exploration.** Passive detection works only when asked; the system must also be able to find gaps on its own, judge whether they are worth filling, and execute exploration actions (asking, retrieval, experiments). Otherwise "knowing that I don't know" never becomes "no longer not knowing".
 
 ## 4. Design: An Ignorance-Aware System
 
@@ -116,7 +116,60 @@ It connects naturally to online learning (see *Fast Prediction Framework*, 9.3):
 | Suspected unknown unknown | declare scope, request external verification, mark for audit |
 | Capability boundary | degrade gracefully: decompose the task, use tools, escalate to a human |
 
-## 5. Training
+## 5. An Associated Question: Spontaneous Exploration of Unknown Domains
+
+So far we have discussed "ignorance judgment when asked". There is a stronger question: **can a machine discover what it lacks, and go and fill the gap on its own?**
+
+### 5.1 Why Passive Detection Is Not Enough
+
+- Unknown unknowns do not appear in queries by themselves; the system usually discovers its blind spots only *after* a failure;
+- evaluation sets and red-team audits are externally driven, and their coverage is limited by what humans think to ask;
+- in deployment, new domains, new terminology, and new events keep appearing, so the system must notice "I may not understand this" by itself.
+
+A system that only answers but never explores has passive ignorance awareness: it is exposed only when a user runs into the gap. Truly knowing what one does not know requires **active discovery + active judgment**.
+
+### 5.2 Components
+
+1. **Gap sensing**: find candidate blind spots from failure logs, coverage maps, retrieval contradictions, and new-word/new-topic signals;
+2. **Value judgment**: estimate each candidate's information value (expected information gain, task relevance, risk) and decide whether it is worth exploring;
+3. **Exploration actions**: ask the user, retrieve, call tools, run experiments, generate self-tests;
+4. **Outcome judgment**: after exploring, verify whether the gap is actually filled (external evidence, consistency re-checks) and update the self-knowledge base;
+5. **Exploration discipline**: budget limits and safety boundaries; avoid aimless wandering and self-confirmation.
+
+### 5.3 Formalization
+
+View exploration as choosing an action $a$ that maximizes the reduction in ignorance minus cost and risk:
+
+$$
+a^* = \arg\max_{a \in \mathcal{A}} \; \mathbb{E}\big[\Delta I(a)\big] - \lambda \cdot \mathrm{cost}(a) - \mu \cdot \mathrm{risk}(a)
+$$
+
+where $\Delta I(a)$ is the reduction in uncertainty about the blind spots after the action, and $\mathcal{A}$ is the set of available information-acquisition actions.
+
+Difficulty: $\Delta I(a)$ cannot be estimated accurately — otherwise the answer would already be known. Only proxies are available: retrieval hit rate, question answerability, user feedback, degree of contradiction with existing knowledge.
+
+### 5.4 Relation to the Ignorance-Aware System
+
+- the `probe` field of the ignorance report is the entry point for exploration;
+- the self-knowledge base (4.4) is the exploration map: it records covered, uncovered, and suspected blind spots;
+- the audit loop (4.3) supplies external discovery sources; spontaneous exploration turns external drive into internal drive;
+- online learning (Fast Prediction Framework, 9.3) provides the update channel: newly acquired knowledge must be able to land in the base.
+
+### 5.5 Risks
+
+- **Runaway exploration**: endless questioning or retrieval consumes budget and user patience;
+- **Self-confirmation**: verifying blind spots with one's own knowledge drifts further off;
+- **Safety boundaries**: autonomous exploration may trigger external actions (tool calls, requests) and needs permissions and auditing;
+- **Evaluation lag**: the value of exploration often shows up late, and short-term metrics underestimate it.
+
+### 5.6 Evaluation
+
+- discovery rate: new blind spots found per unit budget;
+- relevance: how related the discovered blind spots are to the task/user needs;
+- convergence: does coverage rise and repeated exploration fall after multiple rounds;
+- safety: rate of unauthorized actions and harmful exploration.
+
+## 6. Training
 
 - **Error-prediction head**: label answers as correct/incorrect on held-out data, classify with hidden states, entropy, and retrieval features; watch for distribution shift;
 - **Conformal calibration**: fit nonconformity scores on validation data; emit prediction sets with coverage guarantees at inference;
@@ -127,7 +180,7 @@ It connects naturally to online learning (see *Fast Prediction Framework*, 9.3):
 
 Risk: self-supervised signals alone reinforce self-confirmation bias; external labels are mandatory — tool verification, human feedback, retrieval results.
 
-## 6. Evaluation
+## 7. Evaluation
 
 | Dimension | Metric | Description |
 | --- | --- | --- |
@@ -146,13 +199,13 @@ Key experiments:
 - multi-round red-team audits to see whether blind spots decrease;
 - ablations: degradation when retrieval, consistency, or conformal signals are removed.
 
-## 7. Relation to the Fast Prediction Framework
+## 8. Relation to the Fast Prediction Framework
 
 - Module 1's coverage (Recall@k, FullCoverageRate) is essentially a **measurable known unknown**: insufficient coverage means the system knows it may not be able to answer fully;
 - the coverage constraint in triple consistency can be exposed directly in the ignorance report;
 - genuine unknown unknowns still require external probing and the online-learning loop; compressed-vocabulary statistics alone cannot find them.
 
-## 8. Difficulties and Open Questions
+## 9. Difficulties and Open Questions
 
 - **The meta-ignorance paradox**: judging "I don't know" can itself be wrong; how do we calibrate judgments about ignorance?
 - **Unknown unknowns cannot be self-certified**: every internal detector has blind spots, so external audits are required — and audits can miss things too;
@@ -161,7 +214,7 @@ Key experiments:
 - **Evaluation lag**: online failures are often noticed long after they happen;
 - **Safety**: ignorance reports may be misread as reliability guarantees.
 
-## 9. Related Work
+## 10. Related Work
 
 - Calibration and selective prediction: temperature scaling, risk–coverage, selective classification;
 - conformal prediction: distribution-free coverage guarantees;
@@ -170,7 +223,7 @@ Key experiments:
 - metacognition and metamemory (cognitive science);
 - active learning, information acquisition, and clarification questions.
 
-## 10. Roadmap
+## 11. Roadmap
 
 | Version | Goal | Criterion |
 | --- | --- | --- |
@@ -178,18 +231,21 @@ Key experiments:
 | v0.2 | Ignorance-report schema + retrieval/consistency signals | known-unknown recall ≥ 90% |
 | v0.3 | Self-knowledge base and audit loop | each audit round finds new failure modes |
 | v0.4 | Online loop | online-failure-to-update latency acceptable |
+| v0.5 | Spontaneous exploration prototype | discovers and verifies new blind spots per unit budget |
 | v1.0 | End-to-end system | significantly better than "always answer" on the unknown-unknown test set |
 
-## 11. TODO
+## 12. TODO
 
 - [ ] Work out calibration and conformal implementations
 - [ ] Design the unknown-unknown test set
 - [ ] Define the ignorance-report interface
 - [ ] Small prototype: error-prediction head + retrieval signals
+- [ ] Design triggers and budget policy for spontaneous exploration
 - [ ] Connect with the Fast Prediction Framework's coverage metrics
 
-## 12. Changelog
+## 13. Changelog
 
 | Date | Change |
 | --- | --- |
 | 2026-11-26 | First draft: problem, three kinds of ignorance, ignorance-report design, training and evaluation |
+| 2026-11-26 | Added §5: spontaneous exploration of unknown domains — components, formalization, risks, evaluation; added Claim 4 and a roadmap row |
