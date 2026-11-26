@@ -1,6 +1,6 @@
 # Fast Prediction Framework (Final)
 
-> Stage: **Final** (~20 pages) · Status: **Stable v1.2** · Last updated: 2026-11-26
+> Stage: **Final** (~20 pages) · Status: **Stable v1.3** · Last updated: 2026-11-26
 > Language: [中文](../../最终版/快速预测框架.md) · English
 
 ## 0. Notation
@@ -24,7 +24,7 @@ A standard language model computes a softmax over the full vocabulary $\mathcal{
 
 The factorization is $p(y \mid x) = p(C \mid x)\, p(y \mid x, C)$. When $C$ is a deterministic function of $x$ and $T(y) \subseteq C$, the factorization is **exact**: quality loss comes only from insufficient coverage and Module 2's modeling error, not from a lossy variational approximation.
 
-Each module has several implementation options (Chapters 6 and 7), and optimization targets triple consistency (Chapter 8).
+Each module has several implementation options (Chapters 6 and 7), and optimization targets triple consistency (Chapter 8). Training adds input noise injection and online learning (Chapter 9), and the Li-MCTS graph grows adaptively with use (7.2.5).
 
 ## 2. Problem Definition
 
@@ -541,7 +541,19 @@ final:  readout score of the sequence, or consistency with the target distributi
 
 The graph can be hand-designed (a few operators: add, multiply, gate, small MLP) or discovered by neural architecture search.
 
-#### 7.2.5 Pros and Cons
+#### 7.2.5 Adaptive Graph Growth
+
+Nodes and edges are not fixed before training; they grow dynamically during training and operation based on usage:
+
+- **Start small**: the initial graph can be tiny (e.g. only the initial function and a few nodes); nodes and edges are added on demand;
+- **Hot-node out-degree expansion**: track how often each node's function is invoked and how often each edge is hit; the more a node is used, the larger its out-degree — partition its value range more finely and add branches so frequent paths are modeled in more detail;
+- **Random new connections**: when growth is needed, connect a new edge to an existing node with some probability (reusing an already-learned subgraph), or create a new node with some probability (opening a new branch);
+- **Capacity limits**: a per-node out-degree cap and a total edge budget; periodically prune low-usage edges so the graph does not blow up;
+- **Split policy**: when an out-degree expands, prefer splitting value ranges with dense samples so new branches receive enough training signal.
+
+This lets graph capacity follow the data distribution: hot regions become finer, cold regions stay sparse. It is also the structural side of online learning (9.3).
+
+#### 7.2.6 Pros and Cons
 
 - Pros:
   - shared computation graph; possibly more parameter-efficient than a Transformer of the same capacity;
@@ -553,7 +565,7 @@ The graph can be hand-designed (a few operators: add, multiply, gate, small MLP)
   - folding is inherently serial, hard to parallelize on GPUs;
   - errors accumulate over long sequences; routing jitter can destabilize paths.
 
-#### 7.2.6 Comparison with Transformer
+#### 7.2.7 Comparison with Transformer
 
 | Aspect | Transformer | Li-MCTS |
 | --- | --- | --- |
@@ -640,6 +652,8 @@ The triple-consistency rate is the single most faithful metric for this framewor
 
 ## 9. Training Pipeline
 
+### 9.1 Staged Pipeline
+
 ```
 Stage 0  Data construction
         x → deduplicated word set; y → word sequence; profile the distribution of |T(y)|
@@ -654,6 +668,38 @@ Stage 4  Optional joint fine-tuning
 ```
 
 Why this order: if Module 2 faces Module 1's predicted set from the start, it learns "compensation strategies" for random misses and masks Module 1's coverage problems; training on gold first, then predicted, lets the two error sources be located separately.
+
+### 9.2 Input Noise Injection
+
+Training inputs are not always clean:
+
+- Insert random noise words at **random positions** in the input sequence (sampled uniformly from the vocabulary or from a dedicated noise pool);
+- The insertion probability increases with position: **the closer to the sentence end, the denser the noise**;
+- The noise ratio follows a curriculum, ramping from 0 to a target level (e.g. 10–20%).
+
+Rationale:
+
+1. Both modules see "extra words", learn to ignore noise and preserve coverage, pairing naturally with noise-robust prediction (6.1.3);
+2. Generation starts right after the input end, so end-of-sentence noise interferes most with the first output word and needs a denser training signal;
+3. Noise injection is data augmentation and mitigates overfitting on small data.
+
+Implementation notes:
+
+- Noise words must not coincide with answer words, or coverage labels get polluted;
+- Record insertion positions per sample for noise-robust prediction;
+- Inject noise during training only; keep inference inputs clean.
+
+### 9.3 Online (Real-Time) Learning
+
+Training philosophy: the model should not be frozen after one unified large-scale initial training; it should keep updating **in real time** as new data arrives.
+
+- **Online updates**: apply small-step updates as new samples arrive (small learning rate; EWC-style regularization when needed);
+- **Replay buffer**: retain a small set of old samples to mitigate catastrophic forgetting;
+- **Adaptive structure**: graph structure and candidate statistics grow with use (see 7.2.5);
+- **Monitoring and rollback**: track online metrics and roll back to the previous checkpoint on degradation;
+- **Division of labor with offline training**: offline large-scale training provides the initial state and a stable base distribution; online learning handles continuous adaptation.
+
+Risks: catastrophic forgetting, polluted online data, lagging evaluation. Mitigations: replay + small learning rate + periodic full refresh + data-quality filtering.
 
 ## 10. Inference and Complexity
 
@@ -745,3 +791,4 @@ Cover three task shapes:
 | 2026-11-26 | Initial version: module decomposition and exactness condition; interfaces, code, evaluation |
 | 2026-11-26 | v1.1: added Chapters 6 (Module 1 algorithms: three prediction regimes × MLP/BERT sampling/flow matching), 7 (Module 2 algorithms: Transformer/Li-MCTS), 8 (triple-consistency objective) |
 | 2026-11-26 | v1.2: consolidated three same-name copies into one document under the single-copy rule; drafts remain in git history only |
+| 2026-11-26 | v1.3: input noise injection and online learning (9.2, 9.3); adaptive Li-MCTS graph growth (7.2.5) |
