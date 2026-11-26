@@ -1,6 +1,6 @@
 # Fast Prediction Framework (Final)
 
-> Stage: **Final** (~20 pages) · Status: **Stable v1.3** · Last updated: 2026-11-26
+> Stage: **Final** (~20 pages) · Status: **Stable v1.4** · Last updated: 2026-11-26
 > Language: [中文](../../最终版/快速预测框架.md) · English
 
 ## 0. Notation
@@ -22,9 +22,9 @@ A standard language model computes a softmax over the full vocabulary $\mathcal{
 1. **Vocabulary Distribution Prediction**: takes an unordered word set, outputs per-word existence probabilities over the whole vocabulary, and selects the compressed vocabulary $C$;
 2. **Word-String Generation**: autoregressively composes the answer inside $C$ only; every output word must come from $C$.
 
-The factorization is $p(y \mid x) = p(C \mid x)\, p(y \mid x, C)$. When $C$ is a deterministic function of $x$ and $T(y) \subseteq C$, the factorization is **exact**: quality loss comes only from insufficient coverage and Module 2's modeling error, not from a lossy variational approximation.
+The factorization is $p(y \mid x) \approx p(C \mid x)\, p(y \mid C)$: the compressed vocabulary $C$ is an unordered, existence-only summary and necessarily discards word order and part of the context. It is a **deliberate information bottleneck** whose cost is measured by coverage and triple consistency.
 
-Each module has several implementation options (Chapters 6 and 7), and optimization targets triple consistency (Chapter 8). Training adds input noise injection and online learning (Chapter 9), and the Li-MCTS graph grows adaptively with use (7.2.5).
+The whole framework scales linearly with sequence length: the input side performs a single linear scan and never uses Transformer-style $O(n^2)$ global attention (2.4). Each module has several implementation options (Chapters 6 and 7), and optimization targets triple consistency (Chapter 8). Training adds input noise injection and online learning (Chapter 9), and the Li-MCTS graph grows adaptively with use (7.2.5).
 
 ## 2. Problem Definition
 
@@ -50,6 +50,8 @@ Each step requires:
 
 With $N = 10^5$, $k = 512$, $L = 32$, and $d = 256$, output-layer multiply-adds drop from about $8.2 \times 10^8$ to about $3.0 \times 10^7$, roughly **27×**. With $k = 256$ it is about 30×.
 
+This counts the output layer only; the $O(n^2)$ input-side cost of global attention is separate and forbidden by the design principle in 2.4.
+
 ### 2.3 Key Observation
 
 The support $T(y)$ of the answer is small and largely determined by the input:
@@ -60,30 +62,39 @@ The support $T(y)$ of the answer is small and largely determined by the input:
 
 So "which words may appear" can be **computed once**, while "how to arrange them" is the real language-modeling problem.
 
+### 2.4 Design Principle: Linear Complexity
+
+The framework's compute must grow linearly with sequence length $n$, not quadratically like Transformer self-attention.
+
+- **Module 1**: a single linear scan over the input — per-token transform (token MLP or linear attention) plus masked pooling, $O(n d^2)$; no pairwise attention inside the input;
+- **Module 2**: works only over the small vocabulary $C$ and the short answer length $L$; it never re-reads the long input; context enters as an $O(1)$ pooled vector;
+- **Optional algorithms are bound too**: any component using global attention (e.g. BERT bidirectional encoding, a Transformer decoder on long answers) must be restricted to short sequences or replaced with linear attention / folding structures; otherwise it cannot be the default.
+
+Rationale: inputs can be long documents, retrieved passages, or multi-turn dialogue. Quadratic cost would explode with input length and cancel the gain from vocabulary compression.
+
 ## 3. Formalization
 
 ### 3.1 Decomposition
 
 $$
-p(y \mid x) = p(C \mid x) \cdot p(y \mid x, C)
+p(y \mid x) \;\approx\; p(C \mid x) \cdot p(y \mid C)
 $$
 
 - $C = \operatorname{TopK}_k\big(\sigma(f_\theta(x))\big) \cup \mathcal{G}$, i.e. $C$ is a deterministic function $C(x)$ of $x$;
-- Module 2 models $q_\phi(y \mid x, C) \approx p(y \mid x, C)$.
+- Module 2 conditions only on $C$ (and an optional $O(1)$ pooled context $h$), modeling $q_\phi(y \mid C) \approx p(y \mid C)$.
 
-### 3.2 Exactness Condition
+Compression necessarily discards word order and part of the context, so this is an **approximation**, not an identity.
 
-Since $C(x)$ is a function of $x$, conditioning on it introduces no new information:
+### 3.2 Approximation and Its Cost
 
-$$
-p(y \mid x, C(x)) = p(y \mid x)
-$$
+Compressing $x$ into an unordered word set $C$ is lossy: $C$ carries no word order, negation, or coreference, and the same $C$ can correspond to several valid answers. The factorization is therefore a **deliberate information bottleneck**, not an attempt at an exact probabilistic decomposition.
 
-holds for any $y$ with $T(y) \subseteq C(x)$. Therefore:
+The cost appears in two places:
 
-> **Framework error = unrepresentable error caused by insufficient coverage + modeling error of Module 2.**
+- **Insufficient coverage**: answer words outside $C$ cannot be expressed;
+- **Generation ambiguity**: the same $C$ with different contexts does not determine a unique answer.
 
-There is no additional information-bottleneck loss. This is the advantage over approximation schemes such as "coarse classification followed by refinement with a small model".
+Coverage metrics and triple consistency (Chapter 8) make these costs explicit. Whether to accept the bottleneck depends on how sensitive the task is to word order and context.
 
 ### 3.3 Objective
 
@@ -123,7 +134,7 @@ Design constraints:
 X (word set)
   │  Embedding (shared vocabulary)
   ▼
-Transformer × L1 (no positional encoding, permutation-equivariant)
+per-token linear transform (token MLP, position-wise)
   │  masked mean pooling (permutation-invariant)
   ▼
 h ∈ R^d
@@ -132,7 +143,7 @@ h ∈ R^d
 p ∈ [0,1]^N
 ```
 
-The absence of positional encoding is deliberate: self-attention is permutation-equivariant with respect to the input, and pooling yields a sentence representation independent of word order, exactly matching the "existence only" contract. For very long inputs (thousands of words), switch to local-window attention or truncate the input by word frequency.
+The encoder is deliberately **linear**: each word passes independently through a small MLP, then masked mean pooling; there is no token-to-token attention. Complexity grows linearly with input length, $O(n d^2)$, satisfying 2.4, and pooling keeps the output invariant to word order, matching the "existence only" contract. If stronger interaction is needed, use linear attention (still $O(n)$), but never global $O(n^2)$ attention.
 
 ### 4.3 Training
 
@@ -144,11 +155,11 @@ The absence of positional encoding is deliberate: self-attention is permutation-
 ### 4.4 Candidate Construction
 
 $$
-C = \operatorname{TopK}_k(p) \cup \mathcal{G} \cup (X \cap \mathcal{V})
+C = \operatorname{TopK}_k(p) \cup \mathcal{G}
 $$
 
 - $\mathcal{G}$: punctuation, EOS, UNK, digit placeholders; optionally high-frequency function words;
-- $X \cap \mathcal{V}$: words appearing in the input, providing the copy channel and significantly improving coverage in dialogue/rewriting;
+- **copy channel (optional)**: only in full-sequence prediction (6.1.2) are input words $X$ merged into $C$; incremental prediction (6.1.1) does not enable it, to keep input words out of the "answer content word" labels;
 - threshold augmentation (optional): also include words with $p_v > \tau$, trading a little speed for coverage;
 - when batching, pad to $k_{\max}$ within the batch and pass a `cand_mask`.
 
@@ -165,25 +176,26 @@ class VocabularyDistributionPredictor(nn.Module):
 
     Input: unordered word set X (deduplicated word ids)
     Output: logits over the full vocabulary; p_v = sigmoid(logit_v)
+
+    Linear complexity: per-token transform + masked pooling, O(n d^2);
+    no attention inside the input.
     """
 
-    def __init__(self, vocab_size: int, d_model: int = 256, n_layers: int = 2):
+    def __init__(self, vocab_size: int, d_model: int = 256):
         super().__init__()
         self.emb = nn.Embedding(vocab_size, d_model, padding_idx=0)
-        layer = nn.TransformerEncoderLayer(
-            d_model, nhead=4, dim_feedforward=4 * d_model,
-            batch_first=True, norm_first=True,
+        # Position-wise MLP: linear in n
+        self.token_mlp = nn.Sequential(
+            nn.Linear(d_model, 4 * d_model), nn.GELU(),
+            nn.Linear(4 * d_model, d_model),
         )
-        # Key: no positional encoding. Self-attention is permutation-equivariant;
-        # masked mean pooling then yields a permutation-invariant representation.
-        self.encoder = nn.TransformerEncoder(layer, n_layers)
         self.classifier = nn.Linear(d_model, vocab_size)
 
     def forward(self, x_ids: torch.Tensor, x_mask: torch.Tensor) -> torch.Tensor:
         # x_ids: [B, n]; x_mask: [B, n], 1 = real word
-        h = self.encoder(self.emb(x_ids), src_key_padding_mask=~x_mask.bool())
+        h = self.token_mlp(self.emb(x_ids))                 # [B, n, d]
         pooled = (h * x_mask.unsqueeze(-1)).sum(1) / x_mask.sum(1, keepdim=True)
-        return self.classifier(pooled)          # [B, N]
+        return self.classifier(pooled)                      # [B, N]
 ```
 
 ```python
@@ -198,7 +210,7 @@ def coverage_loss(logits, y_ids, pad_id=0, pos_weight=8.0):
 ```python
 @torch.no_grad()
 def select_candidates(logits, k, closure, extra_ids=None, pad_id=0):
-    """Build the compressed vocabulary: TopK ∪ closure ∪ input words (copy).
+    """Build the compressed vocabulary: TopK ∪ closure (optionally plus input words for copy in full-sequence mode).
     Returns variable-length candidate lists."""
     B, N = logits.shape
     k = min(k, N)
@@ -212,7 +224,7 @@ def select_candidates(logits, k, closure, extra_ids=None, pad_id=0):
     return out                                             # [B][k_i]
 ```
 
-> Implementation note: $\lvert C\rvert$ differs across samples; the `collate` function pads to the maximum length in the batch and emits `cand_ids` together with `cand_mask`. `extra_ids` are the padded input word ids (including the deduplicated input set).
+> Implementation note: $\lvert C\rvert$ differs across samples; the `collate` function pads to the maximum length in the batch and emits `cand_ids` together with `cand_mask`. `extra_ids` are the padded input word ids (including the deduplicated input set), passed only in full-sequence prediction.
 
 ### 4.6 Metrics
 
@@ -225,27 +237,31 @@ def select_candidates(logits, k, closure, extra_ids=None, pad_id=0):
 ### 5.1 Interface
 
 ```
-input   x: input sentence (ordered, for word-order disambiguation)
-        C: compressed vocabulary + cand_mask
+input   C: compressed vocabulary + cand_mask
+        h: optional pooled context (Module 1 output, O(1))
 output  y = (y_1..y_L), every y_t ∈ C, not required to use all of C
 ```
 
-> Why still feed $x$: $C$ is an unordered word set and cannot uniquely determine the answer ("A hits B" and "B hits A" share the same word set). Module 2 reads the ordered input for disambiguation; $C$ acts as a hard constraint only, not as the sole information source.
+> Module 2 does not re-read the long input sequence; it conditions only on the compressed vocabulary $C$ and, optionally, an $O(1)$ pooled vector $h$. The unordered input is a design contract: word order and context are deliberately discarded in Module 1, and Module 2 composes from the selection $C$; the resulting ambiguity is measured by 3.2 and Chapter 8.
 
 ### 5.2 Architecture
 
 ```
-x (ordered) → small encoder → mem
-y_<t        → Decoder (cross-attention over mem)
-                 │  h_t
-                 ▼
-     logits = h_t · E^T   (shared word embeddings)
-                 │  gather candidate indices of C
-                 ▼
-          softmax over k → y_t
+C (compressed vocabulary) + h (optional pooled context, O(1))
+  │
+  ▼
+Decoder (self-attention only within answer length L; h added/concatenated)
+  │  h_t
+  ▼
+logits = h_t · E^T   (shared word embeddings)
+  │  gather candidate indices of C
+  ▼
+softmax over k → y_t
 ```
 
 The output layer no longer projects to $N$; instead it gathers the rows of the shared embedding matrix that correspond to $C$, and the softmax is taken over only the $k$ candidates. When batching, `cand_mask` sets padded positions to $-\infty$.
+
+There is no cross-attention over the long input: the input side is scanned once, linearly, in Module 1. Standard self-attention inside the answer is $O(L^2)$ with $L$ the short answer length; if answers can be long, switch to linear attention or Li-MCTS folding (7.2) to keep 2.4.
 
 ### 5.3 Constrained Decoding
 
@@ -264,7 +280,7 @@ $$
 class WordStringGenerator(nn.Module):
     """Module 2: Word-String Generation.
 
-    Conditions: mem, the representation of the ordered input x, plus the
+    Conditions: ctx, the pooled representation from Module 1 (O(1)), plus the
     compressed vocabulary C.
     Output: a word string constrained to C; softmax dimension = |C|, not |V|.
     """
@@ -278,9 +294,9 @@ class WordStringGenerator(nn.Module):
         )
         self.decoder = nn.TransformerDecoder(layer, n_layers)
 
-    def forward(self, y_in, mem, cand_ids, cand_mask=None):
-        # y_in: [B, L]; mem: [B, n, d]; cand_ids: [B, k]; cand_mask: [B, k]
-        h = self.decoder(self.emb(y_in), mem)                 # [B, L, d]
+    def forward(self, y_in, ctx, cand_ids, cand_mask=None):
+        # y_in: [B, L]; ctx: [B, 1, d]; cand_ids: [B, k]; cand_mask: [B, k]
+        h = self.decoder(self.emb(y_in), ctx)                 # [B, L, d]
         logits = h @ self.emb.weight.T                        # [B, L, N], shared embeddings
         logits = logits.gather(2, cand_ids.unsqueeze(1).expand(-1, h.size(1), -1))
         if cand_mask is not None:                             # pad candidates -> -inf
@@ -290,12 +306,12 @@ class WordStringGenerator(nn.Module):
 
 ```python
 @torch.no_grad()
-def constrained_decode(model, mem, cand_ids, cand_mask, bos_id, eos_id, max_len=64):
+def constrained_decode(model, ctx, cand_ids, cand_mask, bos_id, eos_id, max_len=64):
     """Constrained decoding: search only within the candidate vocabulary C at every step."""
     cand = cand_ids[0].tolist()
     ys = torch.tensor([[bos_id]])
     for _ in range(max_len):
-        logits = model(ys, mem, cand_ids, cand_mask)[0, -1]   # [k]
+        logits = model(ys, ctx, cand_ids, cand_mask)[0, -1]   # [k]
         nxt = int(cand[int(logits.argmax())])
         ys = torch.cat([ys, torch.tensor([[nxt]])], dim=1)
         if nxt == eos_id:
@@ -419,7 +435,8 @@ Use a BERT-style bidirectional encoder to obtain contextual representations, the
 Training signal: randomly mask the input for denoising training; or add a "set reconstruction" objective on top of multi-label BCE — given some words, predict the rest.
 
 - Pros: strong contextual modeling; can reuse pretrained weights directly;
-- Cons: iterative sampling costs $T$ forward passes; results are not guaranteed optimal; thresholds and rounds need calibration on a validation set.
+- Cons: iterative sampling costs $T$ forward passes; results are not guaranteed optimal; thresholds and rounds need calibration on a validation set;
+- Complexity: BERT bidirectional encoding is global attention, $O(n^2)$, conflicting with 2.4; it fits short inputs only, or must be replaced by a linear-attention variant, and is a research option rather than the default.
 
 #### 6.2.3 Flow Matching: Generate the Set as a Continuous Distribution
 
@@ -462,7 +479,7 @@ Key engineering issues:
 
 Module 2 generates an ordered word string over the compressed vocabulary $C$. Two routes:
 
-- **Neural autoregression**: Transformer decoder; mature and stable;
+- **Neural autoregression**: Transformer decoder (limited to short answers); mature and stable;
 - **Structured search**: Li–Monte Carlo Tree (Li-MCTS); interpretable and potentially more parameter-efficient, but harder to train and infer.
 
 ### 7.1 Transformer Decoder
@@ -471,14 +488,14 @@ The basic structure is given in 5.2; here are optional variants:
 
 | Variant | Description |
 | --- | --- |
-| Encoder–decoder | Input is encoded, answer decoded with cross-attention (default) |
-| Decoder-only | Input and answer concatenated with causal attention; easier to reuse a pretrained LM |
+| Pooled-conditioning decoder (default) | conditioned on Module 1's $O(1)$ pooled representation $h$; never re-reads the long input |
+| Linear-attention decoder | linear attention inside the answer, keeping $O(L)$ |
 | Shared embeddings | Output layer reuses input embeddings, gathering candidate rows; fewer parameters |
 | Hierarchical vocabulary | Group frequent and content words to further cut softmax cost |
 | Trie constraint | For subword vocabularies, expand only over valid prefixes with a trie |
 
 - Pros: parallel training, mature ecosystem, compatible with existing LMs;
-- Cons: serial decoding; every token passes through attention, so latency grows linearly with answer length.
+- Cons: serial decoding; standard self-attention is $O(L^2)$ over the answer, so long answers need linear attention (otherwise 2.4 is violated).
 
 ### 7.2 Li–Monte Carlo Tree (Li-MCTS)
 
@@ -507,7 +524,7 @@ $$
 
 - **Readout**: the final state $s_n$ (or each $s_t$) is mapped by a linear readout to a distribution over $C$, or to a scalar score.
 
-$\operatorname{Route}(v, s)$ returns the target node of the outgoing edge whose region contains $s$; partition regions can be scalar quantiles or learnable hyperplanes.
+$\operatorname{Route}(v, s)$ returns the target node of the outgoing edge whose region contains $s$; partition regions can be scalar quantiles or learnable hyperplanes. Folding costs one binary operator per step ($O(d^2)$), linear in sequence length, with no global attention, so it satisfies 2.4 naturally.
 
 #### 7.2.3 Why Monte Carlo Tree Search
 
@@ -707,7 +724,7 @@ Risks: catastrophic forgetting, polluted online data, lagging evaluation. Mitiga
 input x
   │ Module 1 (single forward pass)
   ▼
-s ∈ R^N → C (TopK + closure + copy)
+s ∈ R^N → C (TopK + closure, optional copy)
   │
   ▼
 Module 2 (autoregressive, vocabulary = C)
@@ -715,6 +732,7 @@ Module 2 (autoregressive, vocabulary = C)
 answer y
 ```
 
+- linear in input length: Module 1 is a single $O(n d^2)$ scan; Module 2 is independent of input length;
 - Module 1 costs one $O(N d)$ output layer per sentence;
 - Module 2 costs $O(k d)$ per step;
 - the speedup grows with $L$;
@@ -755,7 +773,7 @@ Cover three task shapes:
 ## 12. Limitations and Risks
 
 1. **Coverage is not 100%**: numbers, proper names, and rare words easily fall outside $C$; v1 mitigates with thresholds and the copy channel and reports coverage as the main risk metric.
-2. **Semantic loss from unordered input**: Module 1 models sets, so negation, coreference, and subject–object relations are dropped; Module 2 reading the ordered input partly compensates, but Module 1's prediction quality suffers.
+2. **Semantic loss from unordered input**: Module 1 models sets, so negation, coreference, and subject–object relations are dropped at compression time; Module 2 never re-reads the input and composes from $C$ and the pooled $h$. This is a design trade-off whose cost is measured by coverage and triple consistency.
 3. **Fixed $k$ budget**: long answers and enumerations need larger $k$; a fixed $k$ cannot serve both; an adaptive $k$ predicted from length is a direction.
 4. **Function words eat the budget**: the closure and function words are almost always present and squeeze content words.
 5. **Two-stage error accumulation**: when Module 1 misses a word, Module 2 cannot recover it; joint training only mitigates.
@@ -764,7 +782,7 @@ Cover three task shapes:
 
 ## 13. Related Work
 
-- **Copy / pointer-generator networks**: allow copying input words during generation, but the output layer still covers the full vocabulary; this framework makes "copyable words" part of the compressed vocabulary.
+- **Copy / pointer-generator networks**: allow copying input words during generation, but the output layer still covers the full vocabulary; this framework merges input words into the compressed vocabulary only in full-sequence prediction mode.
 - **Adaptive softmax**: hierarchical structures cut output-layer cost, but decoding stays word-by-word and the search space is unchanged; this framework shrinks both the output layer and the search space.
 - **kNN-LM / RETRO**: retrieve from external memory or corpora, solving "where does knowledge come from"; this framework solves "how large is the candidate set".
 - **Constrained decoding**: Module 2 is exactly "generation under a vocabulary constraint", with the constraint supplied dynamically by Module 1.
@@ -792,3 +810,4 @@ Cover three task shapes:
 | 2026-11-26 | v1.1: added Chapters 6 (Module 1 algorithms: three prediction regimes × MLP/BERT sampling/flow matching), 7 (Module 2 algorithms: Transformer/Li-MCTS), 8 (triple-consistency objective) |
 | 2026-11-26 | v1.2: consolidated three same-name copies into one document under the single-copy rule; drafts remain in git history only |
 | 2026-11-26 | v1.3: input noise injection and online learning (9.2, 9.3); adaptive Li-MCTS graph growth (7.2.5) |
+| 2026-11-26 | v1.4: added the linear-complexity design principle (2.4); Module 2 no longer reads the ordered input and depends only on the compressed vocabulary plus an $O(1)$ pooled context; replaced the exactness claim with an information-bottleneck framing; copy channel limited to full-sequence mode |
