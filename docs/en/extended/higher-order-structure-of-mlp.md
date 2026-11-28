@@ -1,6 +1,6 @@
 # Higher-Order Structure of MLP (Extended)
 
-> Stage: **In Progress** (~7 pages) · Status: **WIP** · Last updated: 2026-11-28
+> Stage: **In Progress** (~8 pages) · Status: **WIP** · Last updated: 2026-11-28
 > Language: [中文](../../扩展中途版/MLP的结构升阶.md) · English
 
 ## 1. The Idea
@@ -93,6 +93,24 @@ $$
 - and so on.
 
 Weights are no longer just a matrix; they are quantities on chains distributed over simplices of every order.
+
+### 3.3 Implicit Higher-Order Information in Depth vs. Low-Order Loss
+
+The composition of many layers can itself encode higher-order information: even if each layer only has a linear map and a pointwise activation, composing layers produces higher-order interactions among input coordinates. In other words, high-order terms do not necessarily need explicit parameters — **depth can represent them implicitly**.
+
+But this raises a problem: **low-order information is easily lost through layer-by-layer transformation**.
+
+- each layer transforms the representation, so original coordinates and linear terms are repeatedly re-encoded and may be attenuated, aliased, or overwritten;
+- without cross-layer paths, the network must reconstruct low-order information at every layer, wasting capacity and failing more easily in deep stacks;
+- typical symptoms are rank collapse, signal attenuation, and insensitivity to input detail.
+
+**Residual and U-Net structures are explicit ways to preserve low-order information**:
+
+- residual connections $h_{l+1} = h_l + F(h_l)$ provide an identity path so low-order components pass through unchanged;
+- U-Net-style skip connections send shallow (low-order, fine-grained) representations directly to deep layers, preserving multi-scale information;
+- in the complex view, these skips add new 1-simplices (or even higher cells) between non-adjacent layers; the complex is no longer a simple layered bipartite graph, and its homology changes accordingly.
+
+Implication for the compression conjecture: if higher-order information is already implicit in depth, fewer explicit high-order parameters may be needed and the compression room is larger; but only if low-order information survives the depth — which is exactly what residual/U-Net structures address. Otherwise truncating low-order terms or compressing parameters loses accuracy directly.
 
 ## 4. Homological Representation of Weights
 
@@ -217,7 +235,8 @@ Add $\lambda \sum_k k^{p} \|w_k\|^2$ to the loss to explicitly encourage high-or
 - **P1 truncation**: fix $K$, measure accuracy versus $K$, and check for exponential decay;
 - **P2 compression ratio**: at equal accuracy, compare the parameter count of the complex representation with a standard MLP;
 - **P3 counterexamples**: parity, high-order Boolean functions, and other intrinsically high-order tasks to test whether the decay assumption fails;
-- **P4 regularization**: how order penalties trade off accuracy against decay.
+- **P4 regularization**: how order penalties trade off accuracy against decay;
+- **P5 structure comparison**: order spectra and low-order retention for a plain MLP, a residual MLP, and a U-Net-style MLP.
 
 Success criterion: on at least one task, a small $K$ (e.g. $K \le 3$) matches the accuracy of a full-order MLP with significantly fewer parameters.
 
@@ -231,6 +250,7 @@ Success criterion: on at least one task, a small $K$ (e.g. $K \le 3$) matches th
 - **Choice of norm**: the Lipschitz constant between weight norm and function error may be large, so the exponential bound need not be tight;
 - **Order versus the abelian assumption**: homology quotients out computation order; how can directed complexes / path complexes / operads retain it, and how many extra parameters does an order-preserving representation cost?
 - **Regularity of the representation space**: how do completion, boundedness, the Lipschitz constant, and the norm choice affect truncation error and generalization?
+- **Implicit order and residuals**: how can the order implicit in depth be measured, and what structure do residual/skip connections correspond to in homology?
 
 ## 9. Related Work
 
@@ -276,3 +296,4 @@ Success criterion: on at least one task, a small $K$ (e.g. $K \le 3$) matches th
 | --- | --- |
 | 2026-11-28 | First draft: the full chain graph → complex → homology → Hilbert decay assumption, with a test plan |
 | 2026-11-28 | v1.1: added the gap between ordered computation and abelian homology (4.3) and regularity assumptions such as completeness/boundedness of the representation space (5.4); restated the compression conclusion as an optimistic upper bound |
+| 2026-11-28 | v1.2: added 3.3 on implicit higher-order information in depth and low-order loss, explaining how residual/U-Net structures preserve low-order information; added the P5 structure-comparison experiment |
