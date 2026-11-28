@@ -1,6 +1,6 @@
 # Higher-Order Structure of MLP (Extended)
 
-> Stage: **In Progress** (~6 pages) · Status: **WIP** · Last updated: 2026-11-28
+> Stage: **In Progress** (~7 pages) · Status: **WIP** · Last updated: 2026-11-28
 > Language: [中文](../../扩展中途版/MLP的结构升阶.md) · English
 
 ## 1. The Idea
@@ -19,6 +19,8 @@ Compared with a function expansion or decomposition, linear weights correspond t
 That is, upgrade the graph structure of the MLP to a **simplicial complex**, where weights live on simplices of every dimension. The language of **homology / cohomology** can then describe redundancy and invariant structure in the weights, and low-order information may compress high-order weights.
 
 **Conjecture**: there is a suitable representation space (possibly a Hilbert space) in which higher-order weights shrink and converge to zero; then only lower-order weights are needed for a high-precision representation.
+
+Two qualifications come first: computation is **ordered**, and homology/cohomology is built on abelian (commutative) structure, which discards order — so an order-preserving representation may need more parameters than the homology compression suggests (4.3); and the representation space need not be complete, bounded, or well-normed, so practical use requires additional regularity assumptions (5.4). The compression conclusion below is therefore an **optimistic upper bound**, not a guarantee.
 
 ## 2. The Weight Structure of a Standard MLP
 
@@ -118,6 +120,20 @@ $$
 
 (orthogonal under a suitable inner product). Any weight then splits into "the gradient of a lower-order potential" plus "a harmonic representative": the former compresses, the latter must be kept.
 
+### 4.3 Ordered Computation: Abelian Homology Is Not Enough
+
+Chain complexes are built on free abelian groups (or real vector spaces) with $\partial^2=0$; this is a **commutative** structure: it records which simplices appear with which coefficients, but not the **order** in which the operations happen.
+
+Computation in a neural network is ordered: $W^{(l)}$ and $W^{(l+1)}$ do not commute, nor do activations and linear maps. Two computational graphs with the same edge set but different order can represent different functions, while homology/cohomology assigns them the same classes. That is:
+
+> Homological information is a **quotient** of weight information, not an equivalent complete description. Compressing via homology discards order.
+
+Consequences:
+
+- using cohomology classes as the weight representation requires extra order encoding (directed complexes, path complexes, operads, or higher-categorical structures);
+- an order-preserving representation is generally larger than the abelian quotient, so **matching the same precision may require more parameters** than the homology compression estimate;
+- the decay assumption in Section 5 applies to weights after homological compression and does not directly imply that the original network parameters compress.
+
 ## 5. Hilbert Space and the Decay Assumption
 
 ### 5.1 Representation Space
@@ -148,6 +164,8 @@ $$
 
 so the error decreases exponentially with $K$: **low-order weights suffice for a high-precision representation**. This is the testable form of the conjecture in Section 1.
 
+The bound relies on two premises: the function is Lipschitz in the weights (finite constant $L$), and the representation space is regular enough (5.4); if $L$ is uncontrollable or the space is incomplete, the exponential bound fails.
+
 ### 5.3 Why It Might Hold
 
 - high-order interactions of smooth target functions are usually weak;
@@ -156,6 +174,18 @@ so the error decreases exponentially with $K$: **low-order weights suffice for a
 - the low-dimensional structure of the data makes high-order combinations redundant.
 
 These are intuitions, not proofs; Section 7 gives the test plan.
+
+### 5.4 Regularity Assumptions on the Representation Space
+
+The derivation above assumes $\mathcal{H}$ is a "nice" space: complete, bounded, separable, with a well-behaved norm. This need not hold in practice:
+
+- **Completeness**: only complete inner-product spaces are Hilbert spaces; if we take a direct sum of finitely many cochain spaces and then a limit, we must complete it first, or Cauchy sequences may have no limit and the truncation bound loses meaning;
+- **Boundedness**: weight spaces are usually unbounded (norms can be arbitrarily large); convergence and generalization require extra constraints (weight decay, spectral-norm bounds, compactness assumptions);
+- **Separability and nuclearity**: kernel or Gaussian-process interpretations need additional structure such as separability or nuclearity;
+- **Norm choice**: weight norm and function error differ by a Lipschitz constant; if that constant is unbounded or uncontrollable, the exponential bound is not tight;
+- **Other exotic properties**: non-local, non-commutative, or singular spaces can break projection and orthogonal decomposition.
+
+Practical use therefore needs **additional assumptions**: completion, bounded or compact domains, controllable Lipschitz constants, a separable basis, and a good norm (e.g. an embedding into a Sobolev norm). When these fail, the decay conjecture remains heuristic.
 
 ## 6. Implementation Paths
 
@@ -198,7 +228,9 @@ Success criterion: on at least one task, a small $K$ (e.g. $K \le 3$) matches th
 - **Combinatorial explosion**: the number of $k$-simplices over $n$ vertices is $\binom{n}{k+1}$; high-order terms must be sparse or low-rank;
 - **Interpretability of homology**: what function properties do $H^k$ classes correspond to? Currently this is only a formal analogy;
 - **The decay assumption may fail**: some tasks are intrinsically high-order;
-- **Choice of norm**: the Lipschitz constant between weight norm and function error may be large, so the exponential bound need not be tight.
+- **Choice of norm**: the Lipschitz constant between weight norm and function error may be large, so the exponential bound need not be tight;
+- **Order versus the abelian assumption**: homology quotients out computation order; how can directed complexes / path complexes / operads retain it, and how many extra parameters does an order-preserving representation cost?
+- **Regularity of the representation space**: how do completion, boundedness, the Lipschitz constant, and the norm choice affect truncation error and generalization?
 
 ## 9. Related Work
 
@@ -223,6 +255,8 @@ Success criterion: on at least one task, a small $K$ (e.g. $K \le 3$) matches th
 - [ ] Implement Taylor / ANOVA order-spectrum estimation
 - [ ] Measure decay on small networks
 - [ ] Design a complex-parameterization prototype
+- [ ] Estimate the parameter cost of preserving order
+- [ ] Pin down regularity assumptions on the representation space
 - [ ] Find intrinsically high-order tasks as counterexamples
 
 ## 12. Glossary
@@ -241,3 +275,4 @@ Success criterion: on at least one task, a small $K$ (e.g. $K \le 3$) matches th
 | Date | Change |
 | --- | --- |
 | 2026-11-28 | First draft: the full chain graph → complex → homology → Hilbert decay assumption, with a test plan |
+| 2026-11-28 | v1.1: added the gap between ordered computation and abelian homology (4.3) and regularity assumptions such as completeness/boundedness of the representation space (5.4); restated the compression conclusion as an optimistic upper bound |
