@@ -36,6 +36,7 @@ The three stage folders are **three stages of one document**, not three document
 | --- | --- | --- | --- |
 | Fast Prediction Framework | Final | [快速预测框架](docs/最终版/快速预测框架.md) | [Fast Prediction Framework](docs/en/final/fast-prediction-framework.md) |
 | How Do I Know What I Don't Know | In progress | [我如何知道我不知道什么](docs/扩展中途版/我如何知道我不知道什么.md) | [How Do I Know What I Don't Know](docs/en/extended/how-do-i-know-what-i-dont-know.md) |
+| Higher-Order Structure of MLP | In progress | [MLP 的结构升阶](docs/扩展中途版/MLP的结构升阶.md) | [Higher-Order Structure of MLP](docs/en/extended/higher-order-structure-of-mlp.md) |
 
 ## Conventions
 
