@@ -24,7 +24,7 @@ A standard language model computes a softmax over the full vocabulary $\mathcal{
 
 The factorization is $p(y \mid x) = p(C \mid x)\, p(y \mid x, C)$. The compressed vocabulary $C$ constrains the output only: every answer word must come from $C$, but $C$ does not restrict the information source — Module 2 re-reads the original input for word order and context. When $C$ is a deterministic function of $x$ and $T(y) \subseteq C$, the factorization is **exact**, with quality loss only from insufficient coverage and Module 2's modeling error.
 
-The whole framework scales linearly with sequence length: both the input side and Module 2's re-read use linear-complexity mechanisms, never Transformer-style $O(n^2)$ global attention (2.4). Each module has several implementation options (Chapters 6 and 7), and optimization targets triple consistency (Chapter 8). Training adds input noise injection and online learning (Chapter 9), and the Li-MCTS graph grows adaptively with use (7.2.5).
+The whole framework scales linearly with sequence length: the input side and Module 2's re-read use linear-complexity mechanisms and never introduce Transformer-style $O(n^2)$ attention over the input length; self-attention inside the answer acts only on the short answer length $L$ (2.4). Each module has several implementation options (Chapters 6 and 7), and optimization targets triple consistency (Chapter 8). Training adds input noise injection and online learning (Chapter 9), and the Li-MCTS graph grows adaptively with use (7.2.5).
 
 ## 2. Problem Definition
 
@@ -120,7 +120,7 @@ where $w_v = \alpha$ (positive) or $1$ (negative). The two modules can be traine
 ```
 input   X: set of word ids (unordered, deduplicated), with a mask
 output  s: R^N, p_v = sigmoid(s_v)
-select  C = TopK_k(p) ∪ G ∪ (X ∩ V)
+select  C = TopK_k(p) ∪ G        # optional copy, see 4.4
 ```
 
 Design constraints:
@@ -426,10 +426,10 @@ MLP suffices when the set is mostly determined by input frequency and topic (dia
 
 #### 6.2.2 BERT Sampling: Bidirectional Encoding + Iterative Set Sampling
 
-Use a BERT-style bidirectional encoder to obtain contextual representations, then produce the set. Three granularities:
+Use a BERT-style bidirectional encoder (Devlin et al., 2019) to obtain contextual representations, then produce the set. Three granularities:
 
 1. **Per-word scoring (marginal approximation)**: score the vocabulary with an MLM head and take top-$k$. Equivalent to "BERT representation + sigmoid head", but each word is judged independently and intra-set dependencies are ignored.
-2. **Iterative sampling (MaskGIT-style)**: start from the empty set (or all-masked) and repeat $T$ rounds:
+2. **Iterative sampling (MaskGIT-style; Chang et al., 2022)**: start from the empty set (or all-masked) and repeat $T$ rounds:
    - predict each candidate word's existence probability;
    - keep the most confident batch of words, leave the rest "undecided";
    - continue the next round conditioned on the decided words.
@@ -444,7 +444,7 @@ Training signal: randomly mask the input for denoising training; or add a "set r
 
 #### 6.2.3 Flow Matching: Generate the Set as a Continuous Distribution
 
-The first two methods output per-word marginals. To **sample a whole set** and preserve the multi-modality of "one input, several plausible word sets", use flow matching to model the set distribution directly.
+The first two methods output per-word marginals. To **sample a whole set** and preserve the multi-modality of "one input, several plausible word sets", use flow matching (Lipman et al., 2023) to model the set distribution directly.
 
 Let the target set's existence vector be $z \in \{0,1\}^N$ (or $z \in \mathbb{R}^N$ in logit space), noise $z_0 \sim \mathcal{N}(0, I)$, data $z_1 \sim p_{\text{data}}(\cdot \mid x)$. Define the linear interpolation path
 
@@ -536,7 +536,7 @@ $\operatorname{Route}(v, s)$ returns the target node of the outgoing edge whose 
 - the number of possible paths/word orders is enormous ($C$'s subsets × permutations);
 - the objective is usually sequence-level (whole-sentence quality), not per-word local optimality.
 
-MCTS provides forward-simulation evaluation, UCT-based exploration, and sequence-level optimization without differentiability. Each tree node keeps visit count $N$ and cumulative reward $W$:
+MCTS provides forward-simulation evaluation, UCT-based exploration, and sequence-level optimization without differentiability (Kocsis & Szepesvári, 2006; Silver et al., 2018). Each tree node keeps visit count $N$ and cumulative reward $W$:
 
 $$
 \text{UCT} = \frac{W}{N} + c\sqrt{\frac{\ln N_{\text{parent}}}{N}}
@@ -701,7 +701,7 @@ Training inputs are not always clean:
 Rationale:
 
 1. Both modules see "extra words", learn to ignore noise and preserve coverage, pairing naturally with noise-robust prediction (6.1.3);
-2. Generation starts right after the input end, so end-of-sentence noise interferes most with the first output word and needs a denser training signal;
+2. Generation starts right after the input end, so end-of-sentence noise interferes most with the first output word and needs a denser training signal (this positional preference is a design hypothesis to be tested);
 3. Noise injection is data augmentation and mitigates overfitting on small data.
 
 Implementation notes:
@@ -787,15 +787,15 @@ Cover three task shapes:
 
 ## 13. Related Work
 
-- **Copy / pointer-generator networks**: allow copying input words during generation, but the output layer still covers the full vocabulary; this framework merges input words into the compressed vocabulary only in full-sequence prediction mode.
-- **Adaptive softmax**: hierarchical structures cut output-layer cost, but decoding stays word-by-word and the search space is unchanged; this framework shrinks both the output layer and the search space.
-- **kNN-LM / RETRO**: retrieve from external memory or corpora, solving "where does knowledge come from"; this framework solves "how large is the candidate set".
-- **Constrained decoding**: Module 2 is exactly "generation under a vocabulary constraint", with the constraint supplied dynamically by Module 1.
-- **Set2Seq**: set-to-sequence modeling; shares the "unordered input → ordered output" form with this framework.
-- **Speculative decoding**: draft with a small model and verify with a large one; orthogonal and combinable.
+- **Copy / pointer-generator networks**: allow copying input words during generation, but the output layer still covers the full vocabulary (Gu et al., 2016; See et al., 2017); this framework merges input words into the compressed vocabulary only in full-sequence prediction mode.
+- **Adaptive softmax**: hierarchical structures cut output-layer cost (Grave et al., 2017), but decoding stays word-by-word and the search space is unchanged; this framework shrinks both the output layer and the search space.
+- **kNN-LM / RETRO**: retrieve from external memory or corpora (Khandelwal et al., 2020; Borgeaud et al., 2022), solving "where does knowledge come from"; this framework solves "how large is the candidate set".
+- **Constrained decoding**: Module 2 is exactly "generation under a vocabulary constraint" (Hokamp & Liu, 2017), with the constraint supplied dynamically by Module 1.
+- **Set2Seq**: set-to-sequence modeling (Vinyals et al., 2016); shares the "unordered input → ordered output" form with this framework.
+- **Speculative decoding**: draft with a small model and verify with a large one (Leviathan et al., 2023); orthogonal and combinable.
 - **Non-autoregressive / diffusion LMs**: parallel generation; the hard parts are order and consistency; this framework keeps autoregression but compresses the vocabulary.
-- **Masked generation / flow matching**: MaskGIT-style iterative sampling and flow matching model generation as sets or continuous distributions; Chapter 6 lists both as options for Module 1.
-- **Cycle consistency**: lets multiple constraints corroborate each other; the triple consistency in Chapter 8 borrows this idea.
+- **Masked generation / flow matching**: MaskGIT-style iterative sampling and flow matching model generation as sets or continuous distributions (Chang et al., 2022; Lipman et al., 2023); Chapter 6 lists both as options for Module 1.
+- **Cycle consistency**: lets multiple constraints corroborate each other (Zhu et al., 2017); the triple consistency in Chapter 8 borrows this idea.
 
 ## 14. Roadmap
 
@@ -807,7 +807,25 @@ Cover three task shapes:
 | v0.4 | Joint training | stable gains over separate training |
 | v1.0 | Full experiments | three task shapes, complete ablations, reproducible |
 
-## 15. Changelog
+## 15. References
+
+1. Vaswani, A., Shazeer, N., Parmar, N., et al. (2017). Attention Is All You Need. *NeurIPS 2017*.
+2. Devlin, J., Chang, M.-W., Lee, K., & Toutanova, K. (2019). BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding. *NAACL 2019*.
+3. Grave, E., Joulin, A., Cissé, M., Jégou, H., et al. (2017). Efficient Softmax Approximation for GPUs. *ICML 2017*.
+4. Gu, J., Lu, Z., Li, H., & Li, V. O. K. (2016). Incorporating Copying Mechanism in Sequence-to-Sequence Learning. *ACL 2016*.
+5. See, A., Liu, P. J., & Manning, C. D. (2017). Get To The Point: Summarization with Pointer-Generator Networks. *ACL 2017*.
+6. Khandelwal, U., Levy, O., Jurafsky, D., Zettlemoyer, L., & Lewis, M. (2020). Generalization through Memorization: Nearest Neighbor Language Models. *ICLR 2020*.
+7. Borgeaud, S., Mensch, A., Hoffmann, J., et al. (2022). Improving Language Models by Retrieving from Trillions of Tokens. *ICML 2022*.
+8. Hokamp, C., & Liu, Q. (2017). Lexically Constrained Decoding for Sequence Generation Using Grid Beam Search. *ACL 2017*.
+9. Vinyals, O., Bengio, S., & Kudlur, M. (2016). Order Matters: Sequence to Sequence for Sets. *ICLR 2016*.
+10. Leviathan, Y., Kalman, M., & Matias, Y. (2023). Fast Inference from Transformers via Speculative Decoding. *ICML 2023*.
+11. Chang, H., Zhang, H., Jiang, L., Liu, C., & Freeman, W. T. (2022). Masked Generative Image Transformer. *CVPR 2022*.
+12. Lipman, Y., Chen, R. T. Q., Ben-Hamu, H., Nickel, M., & Le, M. (2023). Flow Matching for Generative Modeling. *ICLR 2023*.
+13. Kocsis, L., & Szepesvári, C. (2006). Bandit Based Monte-Carlo Planning. *ECML 2006*.
+14. Silver, D., Hubert, T., Schrittwieser, J., et al. (2018). A General Reinforcement Learning Algorithm that Masters Chess, Shogi, and Go through Self-Play. *Science*, 362(6419).
+15. Zhu, J.-Y., Park, T., Isola, P., & Efros, A. A. (2017). Unpaired Image-to-Image Translation Using Cycle-Consistent Adversarial Networks. *ICCV 2017*.
+
+## 16. Changelog
 
 | Date | Change |
 | --- | --- |
@@ -817,3 +835,4 @@ Cover three task shapes:
 | 2026-11-26 | v1.3: input noise injection and online learning (9.2, 9.3); adaptive Li-MCTS graph growth (7.2.5) |
 | 2026-11-26 | v1.4: added the linear-complexity design principle (2.4); Module 2 no longer reads the ordered input and depends only on the compressed vocabulary plus an $O(1)$ pooled context; replaced the exactness claim with an information-bottleneck framing; copy channel limited to full-sequence mode |
 | 2026-11-26 | v1.5: corrected Module 2's input handling — it re-reads the ordered input via a linear-complexity encoder, and the compressed vocabulary only constrains the output; restored the exactness condition; updated architecture, code, and complexity analysis |
+| 2026-11-28 | Review: softened the overbroad "no $O(n^2)$ attention at all" claim (restricted to the input side), marked end-of-sentence noise as a to-be-tested hypothesis, and added references |

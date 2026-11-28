@@ -104,8 +104,8 @@ $$
 
 **残差与 U-Net 结构就是显式保留低阶信息的手段**：
 
-- 残差连接 $h_{l+1} = h_l + F(h_l)$ 提供恒等通路，让低阶成分原样传递；
-- U-Net 式的跳连把浅层（低阶、细粒度）表示直接送到深层，保留多尺度信息；
+- 残差连接 $h_{l+1} = h_l + F(h_l)$ 提供恒等通路，让低阶成分原样传递（He et al., 2016）；
+- U-Net 式的跳连把浅层（低阶、细粒度）表示直接送到深层，保留多尺度信息（Ronneberger et al., 2015）；
 - 在复形视角下，这些跳连相当于在不相邻层之间增加新的 1-单纯形（甚至更高维的胞腔），复形不再是简单的分层二分图，同调结构也随之改变。
 
 对压缩猜想的意义：如果高阶信息已经隐含在深度里，显式高阶参数可以更少，压缩空间更大；但前提是低阶信息没有在深层丢失——这正是残差 / U-Net 要解决的问题。否则，截断低阶项或压缩参数会直接损失精度。
@@ -114,7 +114,7 @@ $$
 
 ### 4.1 链复形与上链
 
-单纯复形给出链复形：
+单纯复形给出链复形（Hatcher, 2002）：
 
 $$
 \cdots \to C_{k+1} \xrightarrow{\partial_{k+1}} C_k \xrightarrow{\partial_k} C_{k-1} \to \cdots,\qquad \partial_k \partial_{k+1} = 0
@@ -122,19 +122,19 @@ $$
 
 其中 $C_k$ 以 $k$ 维单纯形为基。权重是 $k$-上链 $w^k \in C^k = \operatorname{Hom}(C_k, \mathbb{R})$，上边缘算子 $\delta_k = \partial_{k+1}^\top$。
 
-### 4.2 精确、闭与同调类
+### 4.2 精确、闭与上同调类
 
 - **精确上链**：$w = \delta u$。权重完全由低一阶的势 $u$ 决定，可以压缩掉，只存 $u$；
 - **闭上链**：$\delta w = 0$。权重在复形上「一致」，没有局部矛盾；
-- **同调类**：$H^k = \ker \delta_k / \operatorname{im} \delta_{k-1}$。它刻画的是**不能**由低阶势生成的那部分权重——真正的高阶信息。
+- **上同调类**：$H^k = \ker \delta_k / \operatorname{im} \delta_{k-1}$。它刻画的是**不能**由低阶势生成的那部分权重——真正的高阶信息。
 
-一个自然的分解是 Hodge 分解：
+标准 Hodge 分解给出正交直和（Lim, 2020）：
 
 $$
-C^k = \operatorname{im}\delta_{k-1} \oplus \ker\delta_k
+C^k = \operatorname{im}\delta_{k-1} \oplus H^k \oplus \operatorname{im}\delta_k^{*}
 $$
 
-（在合适的内积下正交）。于是任意权重可以写成「低阶势的梯度」加「调和代表元」：前者可压缩，后者需保留。
+其中 $H^k = \ker\delta_k \cap \ker\delta_{k-1}^{*}$ 是调和代表元空间，$\delta_k^{*}$ 是 $\delta_k$ 的伴随。于是任意权重可以写成三部分：低阶势的梯度 $\delta u$、调和部分 $h$、高一阶的余边界 $\delta_k^{*} v$。精确部分可由低阶势生成，调和部分是不可约的高阶信息，余边界部分由高一阶的余势生成。
 
 ### 4.3 有序计算：阿贝尔同调不够
 
@@ -142,11 +142,11 @@ $$
 
 但神经网络的计算是有序的：$W^{(l)}$ 与 $W^{(l+1)}$ 不可交换，激活与线性映射的先后也不可交换。两个计算图只要边集相同、顺序不同，就可能表示不同的函数，而同调 / 上同调对它们给出相同的类。也就是说：
 
-> 同调信息是权重信息的**商**，不是等价的完整描述。按同调压缩，会把顺序信息丢掉。
+> 上同调信息是上链空间的**商**（模掉精确部分），不是等价的完整描述。按上同调压缩，会把顺序信息丢掉。
 
 后果：
 
-- 若要用同调类作为权重表示，需要额外编码顺序（例如把复形升级为有向复形、路径复形、operad 或更高范畴结构）；
+- 若要用同调类作为权重表示，需要额外编码顺序（例如把复形升级为有向复形、路径复形、operad 或更高范畴结构；Grigor'yan et al., 2014; May, 1972）；
 - 保序的表示通常比阿贝尔商更大，因此**达到同等精度可能需要比同调压缩估计更多的参数**；
 - 第 5 节的衰减假设只对「同调压缩之后」的权重成立，不能直接推出原网络的参数可压缩。
 
@@ -186,12 +186,14 @@ $$
 
 - 平滑目标函数的高阶交互通常较弱；
 - 权重衰减等正则化压制高阶项；
-- 网络训练存在谱偏置：先学低频/低阶结构；
+- 网络训练存在谱偏置：先学低频/低阶结构（Rahaman et al., 2019）；
 - 数据本身的低维结构让高阶组合冗余。
 
 这些都是直觉而非证明，也不排除高阶信息互补、不可压缩的情形（5.5）；第 7 节给出检验方案。
 
 ### 5.4 表示空间的正则性假设
+
+需要区分有限与无限阶：截断到有限阶时，空间是有限维的，自动完备；本节讨论的是取无限阶极限、或把权重嵌入函数空间（如 Sobolev 空间）时的情形。
 
 上面的推导默认 $\mathcal{H}$ 是一个「好」的空间：完备、有界、可分、范数良好。实际中未必成立：
 
@@ -211,7 +213,7 @@ Hodge 分解已经给出一个结构性理由：同调类 $H^k$ 中的调和代�
 - 高低阶信息是**互补**关系，而不是包含关系；
 - 衰减假设只描述了一类「高阶冗余」的任务，不能推广为普遍事实。
 
-直观例子：奇偶校验（parity）这类函数需要高阶交互，低阶项无论加多少都无法表示。真实任务往往介于两者之间——部分高阶信息冗余（可压缩），部分不可约（必须保留）。
+直观例子：奇偶校验（parity）这类函数需要高阶交互（O'Donnell, 2014），低阶项无论加多少都无法表示。真实任务往往介于两者之间——部分高阶信息冗余（可压缩），部分不可约（必须保留）。
 
 因此正确表述是：**高阶权重的可压缩性是一个可检验的经验问题，取决于任务与表示空间；不能先验假设低阶足以表示高阶。**
 
@@ -225,11 +227,11 @@ $$
 f(x) = W_1 x + \sum_{r} a_r (u_r^\top x)(v_r^\top x) + \sum_{r} b_r (p_r^\top x)(q_r^\top x)(s_r^\top x) + \cdots
 $$
 
-用 CP/Tucker 分解控制参数量，避免组合爆炸。
+用 CP/Tucker 分解控制参数量，避免组合爆炸（Kolda & Bader, 2009）。
 
 ### 6.2 复形参数化
 
-在复形上直接学习上链：低阶势 $u$ 与调和代表元 $h$ 分别参数化，前向时按 Hodge 分解重构 $w = \delta u + h$。这样高阶权重不独立存储，而是由低阶势生成。
+在复形上直接学习上链：低阶势 $u$、调和代表元 $h$ 与高一阶余势 $v$ 分别参数化，前向时按 Hodge 分解重构 $w = \delta u + h + \delta^{*} v$，再让高阶权重由这些势生成。
 
 ### 6.3 事后分解
 
@@ -241,7 +243,7 @@ $$
 
 ## 7. 检验方案
 
-- **P0 阶谱测量**：在小 MLP 上（多项式、布尔函数、图像、回归）估计 $\|w_k\|$ 随 $k$ 的变化；
+- **P0 阶谱测量**：在小 MLP 上（多项式、布尔函数、图像、回归）用 ANOVA / Sobol 类方法估计 $\|w_k\|$ 随 $k$ 的变化（Hoeffding, 1948; Sobol, 1993）；
 - **P1 截断实验**：固定 $K$，测精度随 $K$ 的曲线，验证指数下降；
 - **P2 压缩比**：在同等精度下比较复形表示与标准 MLP 的参数量；
 - **P3 反例**：奇偶校验、高阶布尔函数等本质高阶任务，检验衰减假设是否失效；
@@ -264,10 +266,10 @@ $$
 
 ## 9. 相关工作
 
-- 函数分解：ANOVA、Sobol 敏感性、Taylor 展开；
-- 高阶交互网络：$\Pi$-Net、双线性池化、张量分解；
-- 拓扑深度学习：单纯形网络、胞腔复形、Hodge 拉普拉斯；
-- 谱偏置与 NTK（一阶近似）；
+- 函数分解：ANOVA、Sobol 敏感性、Taylor 展开（Hoeffding, 1948; Sobol, 1993; Hooker, 2004）；
+- 高阶交互网络：$\Pi$-Net、双线性池化、张量分解（Jayakumar et al., 2020; Lin et al., 2015; Kolda & Bader, 2009）；
+- 拓扑深度学习：单纯形网络、胞腔复形、Hodge 拉普拉斯（Carlsson, 2009; Ebli et al., 2020; Bodnar et al., 2021; Lim, 2020）；
+- 谱偏置与 NTK（一阶近似）（Rahaman et al., 2019; Jacot et al., 2018）；
 - 低秩压缩、剪枝与蒸馏。
 
 ## 10. 路线图
@@ -298,9 +300,30 @@ $$
 | 链复形 | 带有边界算子 $\partial$ 的分级向量空间 |
 | 上链 | 定义在单纯形上的权重量 |
 | 同调 / 上同调 | 刻画「洞」与不可约权重模式的不变量 |
-| Hodge 分解 | 上链分解为精确部分与调和部分 |
+| Hodge 分解 | 上链分解为精确部分、调和部分与余边界部分 |
 
-## 13. 变更记录
+## 13. 参考文献
+
+1. Hatcher, A. (2002). *Algebraic Topology*. Cambridge University Press.
+2. Lim, L.-H. (2020). Hodge Laplacians on Graphs. *SIAM Review*, 62(3).
+3. Carlsson, G. (2009). Topology and Data. *Bulletin of the American Mathematical Society*, 46(2).
+4. Ebli, S., Defferrard, M., & Spreemann, G. (2020). Simplicial Neural Networks. *NeurIPS 2020 Workshop on Topological Data Analysis and Beyond*.
+5. Bodnar, C., Frasca, F., Otter, N., Wang, Y., Liò, P., Montúfar, G., & Bronstein, M. (2021). Weisfeiler and Lehman Go Topological: Message Passing Simplicial Networks. *ICML 2021*.
+6. Grigor'yan, A., Lin, Y., Muranov, Y., & Yau, S.-T. (2014). Homologies of path complexes and digraphs. arXiv:1207.2834.
+7. May, J. P. (1972). *The Geometry of Iterated Loop Spaces*. Springer.
+8. Hoeffding, W. (1948). A Class of Statistics with Asymptotically Normal Distribution. *Annals of Mathematical Statistics*, 19(3).
+9. Sobol', I. M. (1993). Sensitivity Estimates for Nonlinear Mathematical Models. *Mathematical Modelling and Computational Experiments*, 1(4).
+10. Hooker, G. (2004). Discovering Additive Structure in Black Box Functions. *KDD 2004*.
+11. Jayakumar, S. M., Czarnecki, W. M., Menick, J., Schwarzschild, A., Rae, J., Osindero, S., Teh, Y. W., Turner, R., & Pascanu, R. (2020). Multiplicative Interactions and Where to Find Them. *ICLR 2020*.
+12. Lin, T.-Y., RoyChowdhury, A., & Maji, S. (2015). Bilinear CNN Models for Fine-grained Visual Recognition. *ICCV 2015*.
+13. Kolda, T. G., & Bader, B. W. (2009). Tensor Decompositions and Applications. *SIAM Review*, 51(3).
+14. Jacot, A., Gabriel, F., & Hongler, C. (2018). Neural Tangent Kernel: Convergence and Generalization in Neural Networks. *NeurIPS 2018*.
+15. Rahaman, N., Baratin, A., Arpit, D., Draxler, F., Lin, M., Hamprecht, F. A., Bengio, Y., & Courville, A. (2019). On the Spectral Bias of Neural Networks. *ICML 2019*.
+16. He, K., Zhang, X., Ren, S., & Sun, J. (2016). Deep Residual Learning for Image Recognition. *CVPR 2016*.
+17. Ronneberger, O., Fischer, P., & Brox, T. (2015). U-Net: Convolutional Networks for Biomedical Image Segmentation. *MICCAI 2015*.
+18. O'Donnell, R. (2014). *Analysis of Boolean Functions*. Cambridge University Press.
+
+## 14. 变更记录
 
 | 日期 | 变更 |
 | --- | --- |
@@ -308,3 +331,4 @@ $$
 | 2026-11-28 | v1.1：补充有序计算与阿贝尔同调的差异（4.3）、表示空间完备性/有界性等正则性假设（5.4）；压缩结论改述为乐观上界 |
 | 2026-11-28 | v1.2：新增 3.3 层级隐含高阶信息与低阶丢失，说明残差/U-Net 保留低阶信息的作用；补充 P5 结构对比实验 |
 | 2026-11-28 | v1.3：修正表述——高低阶信息可能互补，低阶压缩高阶只是条件性假设；新增 5.5 互补性讨论 |
+| 2026-11-28 | 校订：修正 Hodge 分解为「精确 ⊕ 调和 ⊕ 余边界」，澄清有限阶/无限阶的完备性区别，补充相关文献引用 |

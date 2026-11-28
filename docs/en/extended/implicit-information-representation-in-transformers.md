@@ -25,7 +25,7 @@ Here "shape" is not an absolute coordinate but the **relative configuration** of
 
 ### 2.1 KV Projections
 
-Each Transformer layer projects hidden states $X$ into keys and values:
+Each Transformer layer (Vaswani et al., 2017) projects hidden states $X$ into keys and values:
 
 $$
 K = X W_K,\qquad V = X W_V
@@ -63,9 +63,11 @@ These are directly testable with template sentences (Section 6).
 
 Assume words are embedded into Euclidean space with **no prior at all**: all words are equivalent under symmetry, and no word is "naturally closer" to another.
 
+More precisely, "prior-free" means that every permutation of the word set is realized by an isometry of the space (the embedding has the full symmetric group as its symmetry group); Theorem 1 will show that this characterizes the regular simplex uniquely.
+
 ### 3.2 Theorem and Proof
 
-**Theorem 1**: If $n$ words are pairwise equidistant, they must be the vertices of a regular $(n-1)$-simplex; the embedding is unique up to isometry.
+**Theorem 1** ($n \ge 2$): If $n$ words are pairwise equidistant, they must be the vertices of a regular $(n-1)$-simplex; the embedding is unique up to isometry.
 
 **Proof**: Let the embedding be $v_1, \dots, v_n \in \mathbb{R}^d$ with all pairwise distances equal to a constant $d_0$, and centroid $\bar{v} = \frac{1}{n}\sum_i v_i$.
 
@@ -122,7 +124,7 @@ of dimension $|S| - 1$.
 1. for every $P \in \mathcal{F}(S, T)$, $P(\operatorname{aff}(S)) = P(\operatorname{aff}(T))$;
 2. for any vertex subset $U$ with $|U| > k+1$, if $S \nsubseteq U$ and $T \nsubseteq U$, then some $P \in \mathcal{F}(S, T)$ satisfies $P(\operatorname{aff}(U)) \ne P(\operatorname{aff}(S))$.
 
-> Note: $|S| > k+1$ ensures that projecting into $\mathbb{R}^k$ does not exceed the sub-simplex dimension and leaves enough vertices for the construction. Excluding $S \subseteq U$ or $T \subseteq U$ is necessary: in these cases $P(\operatorname{aff}(U)) \supseteq P(\operatorname{aff}(S))$, and all images lie in $\mathbb{R}^k$, so the images must coincide (see 4.4).
+> Note: $|S| > k+1$ ensures that projecting into $\mathbb{R}^k$ does not exceed the sub-simplex dimension and leaves enough vertices for the construction. Here "projection" means a linear map into a lower-dimensional space, not necessarily an idempotent projection. Excluding $S \subseteq U$ or $T \subseteq U$ is necessary: in these cases $P(\operatorname{aff}(U)) \supseteq P(\operatorname{aff}(S))$, and all images lie in $\mathbb{R}^k$, so the images must coincide (see 4.4).
 
 ### 4.3 Construction and Proof
 
@@ -197,6 +199,7 @@ Training gradually sculpts the prior-free simplex geometry into a layered shape:
 ## 7. Limitations
 
 - **The simplex assumption is strong**: real word embeddings are shaped by data, training, and optimization, far from equidistant;
+- **Boundary of the zero model**: the simplex is the zero model with minimal assumptions; a real Transformer has positional encodings, layer normalization, training, and data bias, so KV geometry can deviate substantially. Proposition 2 formalizes a geometric intuition and only shows that "shape similarity alone is insufficient to carry semantic distinctions"; it is not a claim about real KV shapes;
 - **Shape is not uniquely defined**: Gram, subspace, and Procrustes measures each have biases;
 - **Aggregation**: sentence-level shape depends on how tokens are pooled (mean, attention pooling, etc.);
 - **Confounders**: positional encodings, layer normalization, and residuals all change the geometry;
@@ -204,11 +207,11 @@ Training gradually sculpts the prior-free simplex geometry into a layered shape:
 
 ## 8. Related Work
 
-- Word-embedding geometry: anisotropy and cone effects;
-- Representation similarity: CKA, Procrustes alignment, subspace methods;
-- Equidistant codes and tight frames: regular simplices, equiangular tight frames;
-- Superposition and the linear representation hypothesis;
-- Shape and symmetry in geometric deep learning.
+- Word-embedding geometry: anisotropy and cone effects (Ethayarajh, 2019; Gao et al., 2019);
+- Representation similarity: CKA, Procrustes alignment, subspace methods (Kornblith et al., 2019; Schönemann, 1966);
+- Equidistant codes and tight frames: regular simplices, equiangular tight frames (Strohmer & Heath, 2003; Sustik et al., 2007);
+- Superposition and the linear representation hypothesis (Elhage et al., 2022; Park et al., 2023);
+- Shape and symmetry in geometric deep learning (Bronstein et al., 2021).
 
 ## 9. Roadmap
 
@@ -238,8 +241,24 @@ Training gradually sculpts the prior-free simplex geometry into a layered shape:
 | Procrustes distance | minimum Frobenius distance after orthogonal alignment |
 | Principal angles | the sequence of angles between two subspaces |
 
-## 12. Changelog
+## 12. References
+
+1. Vaswani, A., Shazeer, N., Parmar, N., et al. (2017). Attention Is All You Need. *NeurIPS 2017*.
+2. Mikolov, T., Sutskever, I., Chen, K., Corrado, G., & Dean, J. (2013). Distributed Representations of Words and Phrases and their Compositionality. *NeurIPS 2013*.
+3. Ethayarajh, K. (2019). How Contextual are Contextualized Word Representations? Comparing the Geometry of BERT, ELMo, and GPT-2 Embeddings. *EMNLP 2019*.
+4. Gao, J., He, D., Tan, X., Qin, T., Wang, L., & Liu, T.-Y. (2019). Representation Degeneration Problem in Training Natural Language Generation Models. *ICLR 2019*.
+5. Kornblith, S., Norouzi, M., Lee, H., & Hinton, G. (2019). Similarity of Neural Network Representations Revisited. *ICML 2019*.
+6. Schönemann, P. H. (1966). A Generalized Solution of the Orthogonal Procrustes Problem. *Psychometrika*, 31(1).
+7. Strohmer, T., & Heath, R. W. (2003). Grassmannian Frames with Applications to Coding and Communication. *Applied and Computational Harmonic Analysis*, 14(3).
+8. Sustik, M. A., Tropp, J. A., Dhillon, I. S., & Heath, R. W. (2007). On the Existence of Equiangular Tight Frames. *Linear Algebra and its Applications*, 426(2–3).
+9. Elhage, N., Hume, T., Olsson, C., et al. (2022). Toy Models of Superposition. *Transformer Circuits Thread*.
+10. Park, K., Choe, Y. J., & Veitch, V. (2023). The Linear Representation Hypothesis and the Geometry of Large Language Models. arXiv:2311.03658.
+11. Bronstein, M. M., Bruna, J., Cohen, T., & Veličković, P. (2021). Geometric Deep Learning: Grids, Groups, Graphs, Geodesics, and Gauges. arXiv:2104.13478.
+12. Hewitt, J., & Manning, C. D. (2019). A Structural Probe for Finding Syntax in Word Representations. *NAACL 2019*.
+
+## 13. Changelog
 
 | Date | Change |
 | --- | --- |
 | 2026-11-28 | First draft: shape observation, simplex uniqueness, the projection-family proposition, and implications for Transformers |
+| 2026-11-28 | Review: formalized "prior-free" as permutation symmetry; clarified "projection" and the zero-model boundary; added references on representation geometry and coding theory |

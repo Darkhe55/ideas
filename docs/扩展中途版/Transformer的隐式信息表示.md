@@ -25,7 +25,7 @@
 
 ### 2.1 KV 投影
 
-Transformer 每一层把隐状态 $X$ 投影为 key 与 value：
+Transformer（Vaswani et al., 2017）每一层把隐状态 $X$ 投影为 key 与 value：
 
 $$
 K = X W_K,\qquad V = X W_V
@@ -63,9 +63,11 @@ $$
 
 假设词嵌入到欧氏空间，并且**没有任何先验**：所有词在对称意义下等价，不存在“某些词天然更近”这样的设定。
 
+更精确地说，“无先验”指词集上的任意置换都可由空间等距实现（嵌入具有完全对称群）；定理 1 将说明，这唯一地刻画了正则单形。
+
 ### 3.2 定理与证明
 
-**定理 1**：若 $n$ 个词两两等距，则它们必然是正则 $(n-1)$-单形的顶点；该嵌入在等距变换下唯一。
+**定理 1**（$n \ge 2$）：若 $n$ 个词两两等距，则它们必然是正则 $(n-1)$-单形的顶点；该嵌入在等距变换下唯一。
 
 **证明**：设嵌入为 $v_1, \dots, v_n \in \mathbb{R}^d$，所有词对距离为常数 $d_0$，质心 $\bar{v} = \frac{1}{n}\sum_i v_i$。
 
@@ -122,7 +124,7 @@ $$
 1. 对任意 $P \in \mathcal{F}(S, T)$，都有 $P(\operatorname{aff}(S)) = P(\operatorname{aff}(T))$；
 2. 对任意顶点子集 $U$，$|U| > k+1$，只要 $S \nsubseteq U$ 且 $T \nsubseteq U$，就存在 $P \in \mathcal{F}(S, T)$ 使得 $P(\operatorname{aff}(U)) \ne P(\operatorname{aff}(S))$。
 
-> 说明：条件 $|S| > k+1$ 保证投影到 $\mathbb{R}^k$ 时不超过子单形的维数，同时给构造留出足够顶点。排除 $S \subseteq U$ 或 $T \subseteq U$ 是必要的：这两种情况下 $P(\operatorname{aff}(U)) \supseteq P(\operatorname{aff}(S))$，而所有像都落在 $\mathbb{R}^k$ 里，像必然相等（见 4.4）。
+> 说明：条件 $|S| > k+1$ 保证投影到 $\mathbb{R}^k$ 时不超过子单形的维数，同时给构造留出足够顶点。这里的“投影”指到低维空间的线性映射，不要求是幂等投影。排除 $S \subseteq U$ 或 $T \subseteq U$ 是必要的：这两种情况下 $P(\operatorname{aff}(U)) \supseteq P(\operatorname{aff}(S))$，而所有像都落在 $\mathbb{R}^k$ 里，像必然相等（见 4.4）。
 
 ### 4.3 构造与证明
 
@@ -197,6 +199,7 @@ $$
 ## 7. 局限
 
 - **单形假设过强**：真实词嵌入受数据、训练、优化影响，远离等距；
+- **零模型的边界**：单形是最小假设的零模型；真实 Transformer 有位置编码、层归一化、训练与数据偏置，KV 几何会显著偏离单形。命题 2 是几何直觉的形式化，只说明“形状相似本身不足以承载语义区分”，不是关于真实 KV 形状的断言；
 - **形状定义不唯一**：Gram、子空间、Procrustes 各有偏差；
 - **聚合方式**：句子级形状依赖于 token 如何汇总（均值、注意力池化等）；
 - **混淆因素**：位置编码、层归一化、残差都会改变几何；
@@ -204,11 +207,11 @@ $$
 
 ## 8. 相关工作
 
-- 词嵌入几何：各向异性、锥形分布；
-- 表示相似性：CKA、Procrustes 对齐、子空间方法；
-- 等距码与紧框架：正则单形、等角紧框架；
-- 叠加表示与线性表示假设；
-- 几何深度学习中的形状与对称性。
+- 词嵌入几何：各向异性、锥形分布（Ethayarajh, 2019; Gao et al., 2019）；
+- 表示相似性：CKA、Procrustes 对齐、子空间方法（Kornblith et al., 2019; Schönemann, 1966）；
+- 等距码与紧框架：正则单形、等角紧框架（Strohmer & Heath, 2003; Sustik et al., 2007）；
+- 叠加表示与线性表示假设（Elhage et al., 2022; Park et al., 2023）；
+- 几何深度学习中的形状与对称性（Bronstein et al., 2021）。
 
 ## 9. 路线图
 
@@ -238,8 +241,24 @@ $$
 | Procrustes 距离 | 正交对齐后的最小 Frobenius 距离 |
 | 子空间主角度 | 两个子空间之间的夹角序列 |
 
-## 12. 变更记录
+## 12. 参考文献
+
+1. Vaswani, A., Shazeer, N., Parmar, N., et al. (2017). Attention Is All You Need. *NeurIPS 2017*.
+2. Mikolov, T., Sutskever, I., Chen, K., Corrado, G., & Dean, J. (2013). Distributed Representations of Words and Phrases and their Compositionality. *NeurIPS 2013*.
+3. Ethayarajh, K. (2019). How Contextual are Contextualized Word Representations? Comparing the Geometry of BERT, ELMo, and GPT-2 Embeddings. *EMNLP 2019*.
+4. Gao, J., He, D., Tan, X., Qin, T., Wang, L., & Liu, T.-Y. (2019). Representation Degeneration Problem in Training Natural Language Generation Models. *ICLR 2019*.
+5. Kornblith, S., Norouzi, M., Lee, H., & Hinton, G. (2019). Similarity of Neural Network Representations Revisited. *ICML 2019*.
+6. Schönemann, P. H. (1966). A Generalized Solution of the Orthogonal Procrustes Problem. *Psychometrika*, 31(1).
+7. Strohmer, T., & Heath, R. W. (2003). Grassmannian Frames with Applications to Coding and Communication. *Applied and Computational Harmonic Analysis*, 14(3).
+8. Sustik, M. A., Tropp, J. A., Dhillon, I. S., & Heath, R. W. (2007). On the Existence of Equiangular Tight Frames. *Linear Algebra and its Applications*, 426(2–3).
+9. Elhage, N., Hume, T., Olsson, C., et al. (2022). Toy Models of Superposition. *Transformer Circuits Thread*.
+10. Park, K., Choe, Y. J., & Veitch, V. (2023). The Linear Representation Hypothesis and the Geometry of Large Language Models. arXiv:2311.03658.
+11. Bronstein, M. M., Bruna, J., Cohen, T., & Veličković, P. (2021). Geometric Deep Learning: Grids, Groups, Graphs, Geodesics, and Gauges. arXiv:2104.13478.
+12. Hewitt, J., & Manning, C. D. (2019). A Structural Probe for Finding Syntax in Word Representations. *NAACL 2019*.
+
+## 13. 变更记录
 
 | 日期 | 变更 |
 | --- | --- |
 | 2026-11-28 | 初稿：形状观察、单形唯一性、投影族命题与 Transformer 启示 |
+| 2026-11-28 | 校订：把“无先验”形式化为置换对称；补充“投影”与零模型边界说明；补引表示几何与编码理论文献 |

@@ -14,11 +14,11 @@ Models can answer many questions, but rarely say "I don't know this" in a reliab
 - failing to judge whether a problem is beyond one's capability (long-horizon planning, real-time information, tool use);
 - being unable to explain "why I am uncertain" when pressed.
 
-For humans, knowing what one does not know is part of common sense: most people can roughly judge whether they understand a topic; a minority systematically overestimate themselves (the Dunning–Kruger effect). **Humans at least generally have this ability; machines have not treated it as a capability that must be designed.**
+For humans, knowing what one does not know is part of common sense: most people can roughly judge whether they understand a topic; a minority systematically overestimate themselves (Kruger & Dunning, 1999). **Humans generally have this ability; machines have partial research on calibration, abstention, and selective prediction (Kadavath et al., 2022; Yin et al., 2023; Cheng et al., 2024), but it has not yet become the standard design of general systems, and active discovery of unknown unknowns is especially missing.**
 
 ### 1.2 The Human Reference
 
-- **Metamemory**: the tip-of-the-tongue feeling — "I can't recall it, but I know it exists";
+- **Metamemory**: the tip-of-the-tongue feeling — "I can't recall it, but I know it exists" (Nelson & Narens, 1990);
 - **Calibration**: confidence in an answer roughly matches accuracy;
 - **External help**: when unsure, look it up or ask someone — the feeling of ignorance triggers action;
 - **Boundary awareness**: knowing one's own specialty, and which questions should be referred elsewhere.
@@ -29,7 +29,7 @@ What machines need is not "speaking more cautiously" but **explicit ignorance re
 
 1. The training objective is next-token probability, rewarding "continuations that look like correct answers", not "admitting ignorance";
 2. parametric knowledge is implicit and entangled; there is no queryable "knowledge boundary" inside the model;
-3. alignment training favors helpful answers; refusal is often treated as failure;
+3. alignment training favors helpful answers; refusal is often treated as failure (Ouyang et al., 2022);
 4. evaluation looks at accuracy, not "do you know that you are guessing";
 5. unknown unknowns have no samples in the training distribution — the model cannot learn from "failures it has never seen".
 
@@ -52,6 +52,8 @@ Also distinguish three boundaries:
 **Claim 1: ignorance must be a first-class citizen.** The output should not be just an answer $a$, but a pair $(a, r)$, where $r$ is an ignorance report: confidence, gap type, evidence, and recommended action.
 
 **Claim 2: detectability must be layered.** Known unknowns can be detected with internal signals plus external evidence; unknown unknowns cannot be self-certified and can only be *discovered* through **coverage assumptions + external probing + feedback loops**. The design must honestly separate the two layers instead of pretending introspection solves everything.
+
+**Claim 3: ignorance must drive action.** Once ignorance is detected, the next step is to ask, retrieve, abstain, escalate, or log for later investigation — not to keep generating.
 
 **Claim 4: ignorance awareness ultimately leads to spontaneous exploration.** Passive detection works only when asked; the system must also be able to find gaps on its own, judge whether they are worth filling, and execute exploration actions (asking, retrieval, experiments). Otherwise "knowing that I don't know" never becomes "no longer not knowing".
 
@@ -79,12 +81,12 @@ The report itself needs a confidence: the system's judgment that it "doesn't kno
 
 | Signal | Purpose | Limitation |
 | --- | --- | --- |
-| Temperature scaling / calibration | Make confidence ≈ accuracy | fails out of distribution |
-| Selective prediction | Risk–coverage curve, abstention threshold | needs held-out data |
+| Temperature scaling / calibration (Guo et al., 2017) | Make confidence ≈ accuracy | fails out of distribution |
+| Selective prediction (Geifman & El-Yaniv, 2017) | Risk–coverage curve, abstention threshold | needs held-out data |
 | Consistency probes | Multiple samples or paraphrases; high disagreement means uncertainty | costly |
 | Evidence checks | Empty retrieval, missing citations, tool failure | depends on external system quality |
-| Conformal prediction | Prediction sets with coverage guarantees under exchangeability | guarantee breaks when the assumption fails |
-| Error-prediction head | Hidden states, entropy, retrieval scores predict "will this answer be wrong" | sensitive to distribution shift |
+| Conformal prediction (Vovk et al., 2005; Angelopoulos & Bates, 2021) | Prediction sets with coverage guarantees under exchangeability | guarantee breaks when the assumption fails |
+| Error-prediction head (Kadavath et al., 2022; Yin et al., 2023) | Hidden states, entropy, retrieval scores predict "will this answer be wrong" | sensitive to distribution shift |
 
 ### 4.3 Discovering Unknown Unknowns
 
@@ -92,7 +94,7 @@ This is the hardest part. The principle: **do not claim to introspect unknown un
 
 - **Explicit coverage assumptions**: the system declares the time, domains, languages, and tools of its training data; anything outside is marked `out_of_scope` instead of guessed;
 - **Active self-testing**: generate probe questions it "should / should not" be able to answer, verify with external knowledge bases or tools; failures are discovered blind spots;
-- **Distribution probes**: OOD detection, topic clustering, new-word discovery to flag "things never seen";
+- **Distribution probes**: OOD detection (Hendrycks & Gimpel, 2017), topic clustering, new-word discovery to flag "things never seen";
 - **Failure logs and feedback loops**: user corrections, tool errors, retrieval contradictions are recorded in the self-knowledge base; online failures are the most authentic source of unknown unknowns;
 - **Red teaming and audits**: periodically audit with adversarial and cross-domain questions and measure the discovery rate.
 
@@ -144,7 +146,7 @@ $$
 a^* = \arg\max_{a \in \mathcal{A}} \; \mathbb{E}\big[\Delta I(a)\big] - \lambda \cdot \mathrm{cost}(a) - \mu \cdot \mathrm{risk}(a)
 $$
 
-where $\Delta I(a)$ is the reduction in uncertainty about the blind spots after the action, and $\mathcal{A}$ is the set of available information-acquisition actions.
+where $\Delta I(a)$ is the reduction in uncertainty about the blind spots after the action, and $\mathcal{A}$ is the set of available information-acquisition actions. Bayesian active-learning information gain (Houlsby et al., 2011) can serve as a proxy.
 
 Difficulty: $\Delta I(a)$ cannot be estimated accurately — otherwise the answer would already be known. Only proxies are available: retrieval hit rate, question answerability, user feedback, degree of contradiction with existing knowledge.
 
@@ -216,12 +218,13 @@ Key experiments:
 
 ## 10. Related Work
 
-- Calibration and selective prediction: temperature scaling, risk–coverage, selective classification;
-- conformal prediction: distribution-free coverage guarantees;
-- OOD detection and open-world learning;
-- hallucination detection and factuality evaluation;
-- metacognition and metamemory (cognitive science);
-- active learning, information acquisition, and clarification questions.
+- Calibration and selective prediction: temperature scaling, risk–coverage, selective classification (Guo et al., 2017; Geifman & El-Yaniv, 2017);
+- conformal prediction: distribution-free coverage guarantees (Vovk et al., 2005; Angelopoulos & Bates, 2021);
+- OOD detection and open-world learning (Hendrycks & Gimpel, 2017);
+- hallucination detection and factuality evaluation (Ji et al., 2023);
+- metacognition and metamemory (Nelson & Narens, 1990; Kruger & Dunning, 1999);
+- active learning, information acquisition, and clarification questions (Settles, 2009; Houlsby et al., 2011);
+- epistemic uncertainty (Hüllermeier & Waegeman, 2021).
 
 ## 11. Roadmap
 
@@ -243,9 +246,28 @@ Key experiments:
 - [ ] Design triggers and budget policy for spontaneous exploration
 - [ ] Connect with the Fast Prediction Framework's coverage metrics
 
-## 13. Changelog
+## 13. References
+
+1. Kruger, J., & Dunning, D. (1999). Unskilled and Unaware of It: How Difficulties in Recognizing One's Own Incompetence Lead to Inflated Self-Assessments. *Journal of Personality and Social Psychology*, 77(6).
+2. Nelson, T. O., & Narens, L. (1990). Metamemory: A Theoretical Framework and New Findings. *Psychology of Learning and Motivation*, 26.
+3. Guo, C., Pleiss, G., Sun, Y., & Weinberger, K. Q. (2017). On Calibration of Modern Neural Networks. *ICML 2017*.
+4. Geifman, Y., & El-Yaniv, R. (2017). Selective Classification for Deep Neural Networks. *NeurIPS 2017*.
+5. Vovk, V., Gammerman, A., & Shafer, G. (2005). *Algorithmic Learning in a Random World*. Springer.
+6. Angelopoulos, A. N., & Bates, S. (2021). A Gentle Introduction to Conformal Prediction and Distribution-Free Uncertainty Quantification. arXiv:2107.07511.
+7. Kadavath, S., Conerly, T., Askell, A., et al. (2022). Language Models (Mostly) Know What They Know. arXiv:2207.05221.
+8. Yin, Z., Wang, Q., & Zhang, X. (2023). Do Large Language Models Know What They Don't Know? *ACL 2023 Findings*.
+9. Cheng, Q., Sun, T., Zhang, W., et al. (2024). Can AI Assistants Know What They Don't Know? *ICML 2024*.
+10. Hendrycks, D., & Gimpel, K. (2017). A Baseline for Detecting Misclassified and Out-of-Distribution Examples in Neural Networks. *ICLR 2017*.
+11. Ji, Z., Lee, N., Frieske, R., et al. (2023). Survey of Hallucination in Natural Language Generation. *ACM Computing Surveys*, 55(12).
+12. Ouyang, L., Wu, J., Jiang, X., et al. (2022). Training Language Models to Follow Instructions with Human Feedback. *NeurIPS 2022*.
+13. Settles, B. (2009). Active Learning Literature Survey. *Computer Sciences Technical Report 1648*, University of Wisconsin–Madison.
+14. Houlsby, N., Huszár, F., Ghahramani, Z., & Lengyel, M. (2011). Bayesian Active Learning for Classification and Preference Learning. arXiv:1112.5745.
+15. Hüllermeier, E., & Waegeman, W. (2021). Aleatoric and Epistemic Uncertainty in Machine Learning: An Introduction to Concepts and Methods. *Machine Learning*, 110.
+
+## 14. Changelog
 
 | Date | Change |
 | --- | --- |
 | 2026-11-26 | First draft: problem, three kinds of ignorance, ignorance-report design, training and evaluation |
+| 2026-11-28 | Review: restored the accidentally deleted "Claim 3"; softened the overclaim that machines lack the capability entirely; added citations on calibration, selective prediction, conformal prediction, and self-knowledge |
 | 2026-11-26 | Added §5: spontaneous exploration of unknown domains — components, formalization, risks, evaluation; added Claim 4 and a roadmap row |
