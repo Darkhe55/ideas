@@ -18,9 +18,9 @@ Compared with a function expansion or decomposition, linear weights correspond t
 
 That is, upgrade the graph structure of the MLP to a **simplicial complex**, where weights live on simplices of every dimension. The language of **homology / cohomology** can then describe redundancy and invariant structure in the weights, and low-order information may compress high-order weights.
 
-**Conjecture**: there is a suitable representation space (possibly a Hilbert space) in which higher-order weights shrink and converge to zero; then only lower-order weights are needed for a high-precision representation.
+**Conjecture**: there is a suitable representation space (possibly a Hilbert space) in which higher-order weights shrink and converge to zero; if so, only lower-order weights are needed for a high-precision representation.
 
-Two qualifications come first: computation is **ordered**, and homology/cohomology is built on abelian (commutative) structure, which discards order — so an order-preserving representation may need more parameters than the homology compression suggests (4.3); and the representation space need not be complete, bounded, or well-normed, so practical use requires additional regularity assumptions (5.4). The compression conclusion below is therefore an **optimistic upper bound**, not a guarantee.
+But this is a conjecture, not a fact: high- and low-order information may be **complementary** — high-order terms carry what low-order ones cannot generate (the cohomology classes in 4.2 are exactly such irreducible information), and discarding them directly loses accuracy. Computation is also ordered (4.3), and the representation space need not be complete or bounded (5.4). The compression conclusion is therefore a **conditional hypothesis** that must be tested.
 
 ## 2. The Weight Structure of a Standard MLP
 
@@ -180,7 +180,7 @@ $$
 \|f_w - f_{w_{\le K}}\| \le L \sum_{k>K} \|w_k\| \le \frac{L C \rho^{K+1}}{1-\rho}
 $$
 
-so the error decreases exponentially with $K$: **low-order weights suffice for a high-precision representation**. This is the testable form of the conjecture in Section 1.
+so the error decreases exponentially with $K$: **when the assumption holds**, low-order weights suffice for a high-precision representation. This is the testable form of the conjecture in Section 1.
 
 The bound relies on two premises: the function is Lipschitz in the weights (finite constant $L$), and the representation space is regular enough (5.4); if $L$ is uncontrollable or the space is incomplete, the exponential bound fails.
 
@@ -191,7 +191,7 @@ The bound relies on two premises: the function is Lipschitz in the weights (fini
 - network training shows spectral bias: low-frequency/low-order structure is learned first;
 - the low-dimensional structure of the data makes high-order combinations redundant.
 
-These are intuitions, not proofs; Section 7 gives the test plan.
+These are intuitions, not proofs, and they do not rule out complementary, incompressible high-order information (5.5); Section 7 gives the test plan.
 
 ### 5.4 Regularity Assumptions on the Representation Space
 
@@ -204,6 +204,18 @@ The derivation above assumes $\mathcal{H}$ is a "nice" space: complete, bounded,
 - **Other exotic properties**: non-local, non-commutative, or singular spaces can break projection and orthogonal decomposition.
 
 Practical use therefore needs **additional assumptions**: completion, bounded or compact domains, controllable Lipschitz constants, a separable basis, and a good norm (e.g. an embedding into a Sobolev norm). When these fail, the decay conjecture remains heuristic.
+
+### 5.5 Complementarity: Low Order Does Not Necessarily Compress High Order
+
+The Hodge decomposition already gives a structural reason: harmonic representatives in cohomology classes $H^k$ cannot be generated from lower-order potentials $\delta u$. If such weights do not decay with order but carry information that low-order terms cannot express, then:
+
+- low-order parameters cannot compress them, and forcible truncation directly loses accuracy;
+- high- and low-order information are **complementary**, not one containing the other;
+- the decay assumption describes only tasks with "high-order redundancy" and cannot be generalized to a universal fact.
+
+An intuitive example: parity-like functions require high-order interactions; no amount of low-order terms can represent them. Real tasks usually lie in between — some high-order information is redundant (compressible), some is irreducible (must be kept).
+
+The correct statement is therefore: **the compressibility of high-order weights is an empirical question that depends on the task and the representation space; one cannot assume a priori that low order suffices to represent high order.**
 
 ## 6. Implementation Paths
 
@@ -246,7 +258,7 @@ Success criterion: on at least one task, a small $K$ (e.g. $K \le 3$) matches th
 - **Computational graph versus interaction graph**: $W$ connects inter-layer units, while interaction terms connect input coordinates; how do they coexist on the same complex?
 - **Combinatorial explosion**: the number of $k$-simplices over $n$ vertices is $\binom{n}{k+1}$; high-order terms must be sparse or low-rank;
 - **Interpretability of homology**: what function properties do $H^k$ classes correspond to? Currently this is only a formal analogy;
-- **The decay assumption may fail**: some tasks are intrinsically high-order;
+- **The decay assumption may fail**: some tasks are intrinsically high-order, and high/low-order information may be complementary, so low order cannot compress high order;
 - **Choice of norm**: the Lipschitz constant between weight norm and function error may be large, so the exponential bound need not be tight;
 - **Order versus the abelian assumption**: homology quotients out computation order; how can directed complexes / path complexes / operads retain it, and how many extra parameters does an order-preserving representation cost?
 - **Regularity of the representation space**: how do completion, boundedness, the Lipschitz constant, and the norm choice affect truncation error and generalization?
@@ -297,3 +309,4 @@ Success criterion: on at least one task, a small $K$ (e.g. $K \le 3$) matches th
 | 2026-11-28 | First draft: the full chain graph → complex → homology → Hilbert decay assumption, with a test plan |
 | 2026-11-28 | v1.1: added the gap between ordered computation and abelian homology (4.3) and regularity assumptions such as completeness/boundedness of the representation space (5.4); restated the compression conclusion as an optimistic upper bound |
 | 2026-11-28 | v1.2: added 3.3 on implicit higher-order information in depth and low-order loss, explaining how residual/U-Net structures preserve low-order information; added the P5 structure-comparison experiment |
+| 2026-11-28 | v1.3: corrected the claim — high- and low-order information may be complementary, and low-order compression of high-order weights is only a conditional hypothesis; added 5.5 |
