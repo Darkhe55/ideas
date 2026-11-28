@@ -38,6 +38,7 @@
 | 我如何知道我不知道什么 | 扩展中途版 | [我如何知道我不知道什么](docs/扩展中途版/我如何知道我不知道什么.md) | [How Do I Know What I Don't Know](docs/en/extended/how-do-i-know-what-i-dont-know.md) |
 | MLP 的结构升阶 | 扩展中途版 | [MLP 的结构升阶](docs/扩展中途版/MLP的结构升阶.md) | [Higher-Order Structure of MLP](docs/en/extended/higher-order-structure-of-mlp.md) |
 | Transformer 的隐式信息表示 | 扩展中途版 | [Transformer 的隐式信息表示](docs/扩展中途版/Transformer的隐式信息表示.md) | [Implicit Information Representation in Transformers](docs/en/extended/implicit-information-representation-in-transformers.md) |
+| 没实现自驱力时的模型伪 RSI 方法 | 扩展中途版 | [没实现自驱力时的模型伪 RSI 方法](docs/扩展中途版/没实现自驱力时的模型伪RSI方法.md) | [Pseudo-RSI Without Self-Drive](docs/en/extended/pseudo-rsi-without-self-drive.md) |
 
 ## 写作约定
 
